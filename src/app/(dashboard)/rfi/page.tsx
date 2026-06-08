@@ -66,7 +66,6 @@ interface Row {
   answer: string | null
   submission_date: string | null
   response_date: string | null
-
   remarks: string | null
 parent_id: string | null
   is_archived: boolean
@@ -76,18 +75,8 @@ element: string
 ac_co: string
 approval_date: string | null
   v_time: number | null
-  
-
   request_no?: string
   description?: string
-  
-  
-  
-  
-  
-  
-  
-  
 }
 
 // Group rows: each group = root row + all its revisions
