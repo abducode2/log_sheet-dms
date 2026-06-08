@@ -113,7 +113,6 @@ function groupRows(rows: Row[]): Group[] {
       description: root.subject ?? '',
       rows: sorted,
       no:          root.no,
-      // description: root.description,
       element:     root.element,
     }
   }).sort((a,b) => a.no - b.no)
@@ -468,6 +467,7 @@ export default function RfiPage() {
                     { key:'rev',            label:'Rev.',              w:55 },
                     { key:'submission_date',label:'تاريخ التقديم',    w:undefined },
                     { key:'ac_co',          label:'الحالة',           w:160 },
+
                   ].map(col => (
                     <th key={col.key} style={col.w ? {width:col.w} : {}} onClick={e => e.stopPropagation()}>
                       <div style={{ position:'relative' }}>
@@ -612,9 +612,7 @@ export default function RfiPage() {
                           )}
                         </td>
 
-                        {/* Response date */}
-                        <td className="cell-mono" style={{ color:'var(--text2)' }}>{row.response_date ?? '—'}</td>
-
+                        
                         {/* V.Time */}
                         <td>
                           {isEditing ? (
