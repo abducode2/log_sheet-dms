@@ -15,8 +15,8 @@ export default function StatsGrid({ stats }: { stats: Stats }) {
     { num: stats.total,    label: 'رسومات التنفيذ الكلية',   color: 'var(--blue)',   pct: 100, href: '/shop-drawings' },
     { num: stats.approved, label: 'معتمد مع ملاحظات — B',    color: 'var(--green)',  pct: Math.round(stats.approved/stats.total*100) || 0, href: '/shop-drawings?status=B' },
     { num: stats.revision, label: 'مراجعة وإعادة تقديم — C', color: 'var(--amber)',  pct: Math.round(stats.revision/stats.total*100) || 0, href: '/shop-drawings?status=C' },
-    { num: stats.rwfNag,   label: 'خطابات الرواف ← نجا',     color: 'var(--orange)', pct: Math.round(stats.rwfNag/(stats.rwfNag+stats.nagRwf)*100) || 0, href: '/letters/rawaf-naga' },
-    { num: stats.nagRwf,   label: 'خطابات نجا ← الرواف',     color: 'var(--red)',    pct: 100, href: '/letters/naga-rawaf' },
+    { num: stats.rwfNag,   label: 'خطابات المقاول ← الاستشاري',     color: 'var(--orange)', pct: Math.round(stats.rwfNag/(stats.rwfNag+stats.nagRwf)*100) || 0, href: '/letters/rawaf-naga' },
+    { num: stats.nagRwf,   label: 'خطابات الاستشاري ← المقاول',     color: 'var(--red)',    pct: 100, href: '/letters/naga-rawaf' },
   ]
 
   return (

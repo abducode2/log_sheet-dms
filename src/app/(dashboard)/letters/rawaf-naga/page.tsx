@@ -1,4 +1,9 @@
-import LettersClient from '@/components/tables/LettersClient'
+import LettersPage from '@/components/letters/LettersPage'
 export default function RawafNagaPage() {
-  return <LettersClient table="letters_rawaf_naga" title="مراسلات الرواف ← نجا (الصادرة)" sub="MURCIA-2 Zone 06" />
+  return <LettersPage
+    table="letters_rawaf_naga"
+    title="مراسلات المقاول ← الاستشاري (الصادرة)"
+    addTitle="إضافة خطاب صادر جديد"
+    exportFile="rawaf_naga_P179.xlsx"
+  />
 }

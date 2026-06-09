@@ -19,8 +19,8 @@ const TABLE_LABELS: Record<string, string> = {
   requests_for_information:       'RFI',
   non_conformance_reports:        'NCR',
   field_reports:                  'التقارير الميدانية',
-  letters_rawaf_naga:             'الرواف ← نجا',
-  letters_naga_rawaf:             'نجا ← الرواف',
+  letters_rawaf_naga:             'المقاول ← الاستشاري',
+  letters_naga_rawaf:             'الاستشاري ← المقاول',
 }
 
 type SheetPreview = { table: string; label: string; count: number; sample: Record<string, unknown>[] }
@@ -198,7 +198,7 @@ export default function ImportPage() {
               <div>
                 <div className={styles.doneTitle}>اكتمل الاستيراد</div>
                 <div className={styles.doneSub}>
-                  {Object.values(results).reduce((s, r) => s + r.success, 0)} سجل تم استيراده بنجاح
+                  {Object.values(results).reduce((s, r) => s + r.success, 0)} سجل تم استيراده بالاستشاريح
                 </div>
               </div>
             </div>

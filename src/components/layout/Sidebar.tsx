@@ -21,8 +21,8 @@ const NAV_STATIC = [
     { href:'/transmittal',    label:'إرسال الوثائق',        dot:'#8b949e', countKey:'document_transmittals' },
   ]},
   { label: 'المراسلات', items: [
-    { href:'/letters/rawaf-naga', label:'الرواف ← نجا', dot:'#ffa657', countKey:'letters_rawaf_naga' },
-    { href:'/letters/naga-rawaf', label:'نجا ← الرواف', dot:'#f85149', countKey:'letters_naga_rawaf' },
+    { href:'/letters/rawaf-naga', label:'المقاول ← الاستشاري', dot:'#ffa657', countKey:'letters_rawaf_naga' },
+    { href:'/letters/naga-rawaf', label:'الاستشاري ← المقاول', dot:'#f85149', countKey:'letters_naga_rawaf' },
   ]},
 ]
 
@@ -82,7 +82,7 @@ export default function Sidebar({ userEmail }: { userEmail: string }) {
         <div className="sidebar-logo-icon">P216</div>
         <div>
           <div className="sidebar-logo-text">MURCIA-2 ZONE 06</div>
-          <div className="sidebar-logo-sub">شركة الرواف للمقاولات</div>
+          <div className="sidebar-logo-sub">شركة المقاول للمقاولات</div>
         </div>
       </div>
 

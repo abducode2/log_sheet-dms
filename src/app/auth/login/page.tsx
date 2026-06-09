@@ -99,7 +99,7 @@ export default function LoginPage() {
               <input
                 className="form-input"
                 type="text"
-                placeholder="محمد العمري"
+                placeholder="Abdalla El-Zubair"
                 value={fullName}
                 onChange={e => setFullName(e.target.value)}
                 required
@@ -161,7 +161,7 @@ export default function LoginPage() {
 
         <div className={styles.footer}>
           <span>مشروع MURCIA-2 · المنطقة 06 · الرياض</span>
-          <span>شركة نجا للاستشارات الهندسية</span>
+          <span>شركة الاستشاري للاستشارات الهندسية</span>
         </div>
       </div>
     </div>

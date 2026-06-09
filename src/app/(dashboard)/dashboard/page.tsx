@@ -43,7 +43,7 @@ export default async function DashboardPage() {
             href="/shop-drawings"
           />
           <RecentTable
-            title="آخر خطابات نجا ← الرواف"
+            title="آخر خطابات الاستشاري ← المقاول"
             columns={['#', 'موضوع الخطاب', 'التاريخ']}
             rows={(recentLetters ?? []).map((r: Record<string, unknown>) => [
               { type: 'code' as const, value: String(r.no ?? '') },

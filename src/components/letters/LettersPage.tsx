@@ -1,0 +1,388 @@
+
+'use client'
+import { useState, useEffect, useCallback } from 'react'
+import { createClient } from '@/lib/supabase/client'
+import Topbar from '@/components/layout/Topbar'
+import styles from '@/app/(dashboard)/shop-drawings/page.module.css'
+
+interface Row {
+  id: string
+  no: number
+  letter_no: string
+  subject: string
+  date: string | null
+  remarks: string | null
+}
+
+interface Props {
+  table: 'letters_rawaf_naga' | 'letters_naga_rawaf'
+  title: string
+  addTitle: string
+  exportFile: string
+}
+
+const PG = 20
+
+function LettersPage({ table, title, addTitle, exportFile }: Props) {
+  const supabase = createClient()
+
+  const [data, setData]         = useState<Row[]>([])
+  const [total, setTotal]       = useState(0)
+  const [page, setPage]         = useState(1)
+  const [search, setSearch]     = useState('')
+  const [loading, setLoading]   = useState(true)
+  const [openCol, setOpenCol]   = useState<string|null>(null)
+  const [colFilters, setColFilters] = useState({ letter_no:'', subject:'', date:'' })
+
+  // Add modal
+  const [showAdd, setShowAdd]   = useState(false)
+  const [newNo,   setNewNo]     = useState('')
+  const [newSub,  setNewSub]    = useState('')
+  const [newDate, setNewDate]   = useState('')
+  const [newRem,  setNewRem]    = useState('')
+  const [saving,  setSaving]    = useState(false)
+  const [addErr,  setAddErr]    = useState('')
+
+  // Edit
+  const [editId,   setEditId]   = useState<string|null>(null)
+  const [editNo,   setEditNo]   = useState('')
+  const [editSub,  setEditSub]  = useState('')
+  const [editDate, setEditDate] = useState('')
+  const [editRem,  setEditRem]  = useState('')
+  const [editSaving, setEditSaving] = useState(false)
+
+  // Delete
+  const [confirmDel, setConfirmDel] = useState<Row|null>(null)
+  const [deleting,   setDeleting]   = useState(false)
+
+  const fetchData = useCallback(async () => {
+    setLoading(true)
+    let q = supabase.from(table).select('*', { count:'exact' })
+      .order('no', { ascending: true })
+      .range((page-1)*PG, page*PG-1)
+    if (search) q = q.or(`letter_no.ilike.%${search}%,subject.ilike.%${search}%`)
+    if (colFilters.letter_no) q = q.ilike('letter_no', `%${colFilters.letter_no}%`)
+    if (colFilters.subject)   q = q.ilike('subject',   `%${colFilters.subject}%`)
+    if (colFilters.date)      q = q.ilike('date',       `%${colFilters.date}%`)
+    const { data: rows, count } = await q
+    setData((rows ?? []) as Row[])
+    setTotal(count ?? 0)
+    setLoading(false)
+  }, [page, search, colFilters, table])
+
+  useEffect(() => { fetchData() }, [fetchData])
+
+  async function getNextNo(): Promise<number> {
+    const { data } = await supabase.from(table).select('no').order('no', { ascending: false }).limit(1)
+    return ((data?.[0]?.no ?? 0) as number) + 1
+  }
+
+  async function openAdd() {
+    setNewNo(''); setNewSub(''); setNewDate(''); setNewRem(''); setAddErr('')
+    setShowAdd(true)
+  }
+
+  async function saveAdd() {
+    if (!newNo || !newSub) { setAddErr('رقم الخطاب والموضوع مطلوبان'); return }
+    setSaving(true)
+    const nextNo = await getNextNo()
+    const { error } = await supabase.from(table).insert({
+      no: nextNo, letter_no: newNo, subject: newSub,
+      date: newDate || null, remarks: newRem || null
+    })
+    if (error) { setAddErr(error.message); setSaving(false) }
+    else { setShowAdd(false); setSaving(false); fetchData() }
+  }
+
+  function startEdit(row: Row) {
+    setEditId(row.id); setEditNo(row.letter_no); setEditSub(row.subject)
+    setEditDate(row.date ?? ''); setEditRem(row.remarks ?? '')
+  }
+
+  async function saveEdit() {
+    if (!editId) return
+    setEditSaving(true)
+    await supabase.from(table).update({
+      letter_no: editNo, subject: editSub,
+      date: editDate || null, remarks: editRem || null
+    }).eq('id', editId)
+    setEditId(null); setEditSaving(false); fetchData()
+  }
+
+  async function deleteRow(row: Row) {
+    setDeleting(true)
+    await supabase.from(table).delete().eq('id', row.id)
+    setConfirmDel(null); setDeleting(false); fetchData()
+  }
+
+  async function exportExcel() {
+    const { data: all } = await supabase.from(table).select('*').order('no')
+    const XLSX = await import('xlsx')
+    const ws = XLSX.utils.json_to_sheet(all ?? [])
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, table)
+    XLSX.writeFile(wb, exportFile)
+  }
+
+  function setColFilter(col: string, val: string) {
+    setColFilters(prev => ({ ...prev, [col]: val })); setOpenCol(null); setPage(1)
+  }
+
+  const pages = Math.ceil(total / PG) || 1
+  const hasFilter = Object.values(colFilters).some(v => v)
+
+  const COL_HEADERS = [
+    { key:'letter_no', label:'رقم الخطاب',    w:160 },
+    { key:'subject',   label:'موضوع الخطاب',  w:undefined },
+    { key:'date',      label:'تاريخ الخطاب',  w:130 },
+  ]
+
+  return (
+    <>
+      <Topbar
+        title={title}
+        sub={`MURCIA-2 Zone 06 · إجمالي ${total} خطاب`}
+        actions={<>
+          <button className="btn btn-ghost btn-sm" onClick={exportExcel}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            تصدير Excel
+          </button>
+          <button className="btn btn-primary btn-sm" onClick={openAdd}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            إضافة خطاب
+          </button>
+        </>}
+      />
+
+      <div className="page-content" onClick={() => setOpenCol(null)}>
+
+        {/* Toolbar */}
+        <div className="toolbar">
+          <div className="search-wrap">
+            <svg className="search-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+            </svg>
+            <input placeholder="بحث في الخطابات..." value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1) }}/>
+          </div>
+          {hasFilter && (
+            <button className="btn btn-ghost btn-sm"
+              onClick={() => { setColFilters({ letter_no:'', subject:'', date:'' }); setPage(1) }}>
+              ✕ مسح الفلاتر
+            </button>
+          )}
+          <span style={{ fontSize:11, color:'var(--text3)', marginRight:'auto' }}>
+            {total} خطاب · صفحة {page} من {pages}
+          </span>
+        </div>
+
+        {/* Table */}
+        <div className="table-wrap">
+          <div className="table-header">
+            <span className="table-title">{title}</span>
+            <span className="table-meta">{total} خطاب</span>
+          </div>
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th style={{width:40}}>#</th>
+                  {COL_HEADERS.map(col => (
+                    <th key={col.key} style={col.w ? {width:col.w} : {}} onClick={e => e.stopPropagation()}>
+                      <div style={{ position:'relative' }}>
+                        <button
+                          className={styles.colFilterBtn}
+                          style={colFilters[col.key as keyof typeof colFilters] ? { color:'var(--blue)' } : {}}
+                          onClick={() => setOpenCol(openCol === col.key ? null : col.key)}
+                        >
+                          {col.label}
+                          {colFilters[col.key as keyof typeof colFilters]
+                            ? <span className={styles.colFilterActive}>●</span>
+                            : <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <polyline points="6 9 12 15 18 9"/>
+                              </svg>
+                          }
+                        </button>
+                        {openCol === col.key && (
+                          <div className={styles.colDropdown} onClick={e => e.stopPropagation()}>
+                            <input className={styles.colSearchInput}
+                              placeholder={`بحث في ${col.label}...`}
+                              value={colFilters[col.key as keyof typeof colFilters]}
+                              onChange={e => setColFilters(prev => ({ ...prev, [col.key]: e.target.value }))}
+                              autoFocus/>
+                            <div className={styles.colOptions}>
+                              <div className={`${styles.colOption} ${!colFilters[col.key as keyof typeof colFilters] ? styles.colOptionActive : ''}`}
+                                onClick={() => setColFilter(col.key, '')}>الكل</div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </th>
+                  ))}
+                  <th style={{width:110}}>إجراء</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={5}>
+                    <div className="loading-overlay"><div className="spinner"/><span>جارٍ التحميل...</span></div>
+                  </td></tr>
+                ) : data.length === 0 ? (
+                  <tr><td colSpan={5}>
+                    <div className="empty-state">
+                      <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                        <polyline points="9 22 9 12 15 12 15 22"/>
+                      </svg>
+                      <div className="empty-title">لا توجد خطابات</div>
+                      <div className="empty-sub">ابدأ بإضافة خطاب جديد أو استورد من Excel</div>
+                    </div>
+                  </td></tr>
+                ) : data.map(row => (
+                  <tr key={row.id}>
+                    <td className="cell-mono cell-dim">{row.no}</td>
+
+                    {/* letter_no */}
+                    <td>
+                      {editId === row.id
+                        ? <input className="form-input" style={{ padding:'4px 8px', fontSize:11 }}
+                            value={editNo} onChange={e => setEditNo(e.target.value)} autoFocus/>
+                        : <span className="cell-mono cell-blue">{row.letter_no}</span>
+                      }
+                    </td>
+
+                    {/* subject */}
+                    <td>
+                      {editId === row.id
+                        ? <input className="form-input" style={{ padding:'4px 8px', fontSize:12 }}
+                            value={editSub} onChange={e => setEditSub(e.target.value)}/>
+                        : <span className="cell-desc" title={row.subject}>{row.subject}</span>
+                      }
+                    </td>
+
+                    {/* date */}
+                    <td>
+                      {editId === row.id
+                        ? <input type="date" className="form-input" style={{ padding:'4px 8px', fontSize:11 }}
+                            value={editDate} onChange={e => setEditDate(e.target.value)}/>
+                        : <span className="cell-mono cell-muted">{row.date ?? '—'}</span>
+                      }
+                    </td>
+
+                    {/* actions */}
+                    <td>
+                      {editId === row.id ? (
+                        <div style={{ display:'flex', gap:4 }}>
+                          <button className={styles.btnSave} onClick={saveEdit} disabled={editSaving}>
+                            {editSaving ? '...' : '✓ حفظ'}
+                          </button>
+                          <button className={styles.btnCancel} onClick={() => setEditId(null)}>✕</button>
+                        </div>
+                      ) : (
+                        <div style={{ display:'flex', gap:4 }}>
+                          <button className={styles.btnEdit} onClick={() => startEdit(row)}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                            تعديل
+                          </button>
+                          <button className={styles.btnDel} onClick={() => setConfirmDel(row)}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="3 6 5 6 21 6"/>
+                              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                              <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
+                            </svg>
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          <div className="pagination">
+            <span style={{ fontSize:11, color:'var(--text3)', marginLeft:'auto' }}>إجمالي {total} خطاب</span>
+            {Array.from({ length: Math.min(pages,7) }, (_,i) => (
+              <button key={i} className={`pg-btn ${page===i+1?'active':''}`} onClick={() => setPage(i+1)}>
+                {i+1}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Add Modal */}
+      {showAdd && (
+        <div className="modal-overlay" onClick={e => e.target===e.currentTarget && setShowAdd(false)}>
+          <div className="modal" style={{ width:480 }}>
+            <div className="modal-header">
+              <div className="modal-title">{addTitle}</div>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowAdd(false)}>✕</button>
+            </div>
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0 16px' }}>
+              <div className="form-group">
+                <label className="form-label">
+                  رقم الخطاب <span style={{color:'var(--red)'}}> *</span>
+                </label>
+                <input className="form-input" value={newNo} onChange={e => setNewNo(e.target.value)}
+                  placeholder="M2P06-RWF-NAG-LTR-..."/>
+              </div>
+              <div className="form-group">
+                <label className="form-label">تاريخ الخطاب</label>
+                <input type="date" className="form-input" value={newDate} onChange={e => setNewDate(e.target.value)}/>
+              </div>
+              <div className="form-group" style={{ gridColumn:'1/-1' }}>
+                <label className="form-label">موضوع الخطاب <span style={{color:'var(--red)'}}> *</span></label>
+                <input className="form-input" value={newSub} onChange={e => setNewSub(e.target.value)} placeholder="موضوع الخطاب..."/>
+              </div>
+              <div className="form-group" style={{ gridColumn:'1/-1' }}>
+                <label className="form-label">ملاحظات</label>
+                <textarea className="form-input" rows={2} value={newRem} onChange={e => setNewRem(e.target.value)} style={{resize:'vertical'}}/>
+              </div>
+            </div>
+            {addErr && <div style={{fontSize:12,color:'var(--red)',background:'#da363318',border:'1px solid #da363344',borderRadius:'var(--radius-sm)',padding:'8px 12px',marginBottom:12}}>{addErr}</div>}
+            <div style={{ display:'flex', gap:10, justifyContent:'flex-end', marginTop:8 }}>
+              <button className="btn btn-ghost" onClick={() => setShowAdd(false)}>إلغاء</button>
+              <button className="btn btn-primary" onClick={saveAdd} disabled={saving}>
+                {saving ? <span className="spinner"/> : 'حفظ الخطاب'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm */}
+      {confirmDel && (
+        <div className="modal-overlay">
+          <div className="modal" style={{ width:400 }}>
+            <div className="modal-header">
+              <div className="modal-title" style={{color:'var(--red)'}}>تأكيد الحذف</div>
+            </div>
+            <div style={{background:'var(--bg3)',border:'1px solid #da363333',borderRadius:'var(--radius)',padding:16,marginBottom:20}}>
+              <div style={{fontFamily:'var(--mono)',fontSize:12,color:'var(--blue)',marginBottom:4}}>{confirmDel.letter_no}</div>
+              <div style={{fontSize:13}}>{confirmDel.subject}</div>
+            </div>
+            <div style={{display:'flex',gap:10,justifyContent:'flex-end'}}>
+              <button className="btn btn-ghost" onClick={() => setConfirmDel(null)}>إلغاء</button>
+              <button style={{background:'#da363322',color:'var(--red)',border:'1px solid #da363344',borderRadius:'var(--radius-sm)',padding:'7px 14px',fontSize:12,cursor:'pointer',fontFamily:'inherit'}}
+                onClick={() => deleteRow(confirmDel)} disabled={deleting}>
+                {deleting ? <span className="spinner"/> : 'حذف نهائياً'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+export default LettersPage
