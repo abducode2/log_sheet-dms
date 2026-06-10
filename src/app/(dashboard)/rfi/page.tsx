@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Topbar from '@/components/layout/Topbar'
+import { useRole } from '@/lib/hooks/useRole'
 import AddRecordModal from '@/components/forms/AddRecordModal'
 import type { FieldDef } from '@/components/forms/AddRecordModal'
 import styles from '@/app/(dashboard)/shop-drawings/page.module.css'
@@ -120,6 +121,7 @@ function groupRows(rows: Row[]): Group[] {
 
 export default function RfiPage() {
   const supabase = createClient()
+  const { isAdmin, isEditor } = useRole()
 
   const [activeEl, setActiveEl]     = useState('ALL')
   const [allRows, setAllRows]       = useState<Row[]>([])
@@ -396,19 +398,21 @@ export default function RfiPage() {
         title="طلبات الاستيضاح — Request for Information"
         sub={`MURCIA-2 Zone 06 · إجمالي ${counts.ALL ?? 0} طلب`}
         actions={<>
-          <button className="btn btn-ghost btn-sm" onClick={exportExcel}>
+          {/* <button className="btn btn-ghost btn-sm" onClick={exportExcel}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
             تصدير Excel
-          </button>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-            إضافة طلب RFI
-          </button>
+          </button> */}
+          {isEditor && (
+            <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              إضافة طلب RFI
+            </button>
+          )}
         </>}
       />
 

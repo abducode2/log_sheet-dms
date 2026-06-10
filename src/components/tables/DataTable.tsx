@@ -1,5 +1,6 @@
 'use client'
 import { useState, useCallback } from 'react'
+import { useRole } from '@/lib/hooks/useRole'
 import { getStatusColor, getElementColor } from '@/lib/utils'
 
 export type ColDef = {
@@ -32,6 +33,7 @@ export default function DataTable({
   onPageChange, onSearch, onFilterStatus,
   statusOptions, loading, onAdd, addLabel, title,
 }: Props) {
+  const { isAdmin, isEditor } = useRole()
   const [q, setQ] = useState('')
   const [activeSt, setActiveSt] = useState('all')
   const pages = Math.ceil(total / pageSize) || 1
@@ -92,7 +94,7 @@ export default function DataTable({
             ))}
           </>
         )}
-        {onAdd && (
+        {(onAdd && (isEditor || isAdmin)) && (
           <button className="btn btn-primary btn-sm" onClick={onAdd} style={{ marginRight: 'auto' }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>

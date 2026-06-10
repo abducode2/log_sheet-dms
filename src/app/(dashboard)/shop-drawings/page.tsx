@@ -6,6 +6,7 @@ import Topbar from '@/components/layout/Topbar'
 import AddRecordModal from '@/components/forms/AddRecordModal'
 import type { FieldDef } from '@/components/forms/AddRecordModal'
 import styles from './page.module.css'
+import { useRole } from '@/lib/hooks/useRole'
 
 // ── Helpers ──────────────────────────────────────────────────────
 function calcVtime(sub: string | null, app: string | null): number | null {
@@ -18,11 +19,11 @@ function today(): string { return new Date().toISOString().slice(0, 10) }
 // ── Constants ────────────────────────────────────────────────────
 const ELEMENTS = [
   { key:'ALL', label:'الكل',     color:'#8b949e' },
-  { key:'ARC',  label:'معماري',   color:'#4caf50' },
-  { key:'CIV',  label:'إنشائي',   color:'#64b5f6' },
-  { key:'SUR',  label:'مساحة',    color:'#ffb74d' },
-  { key:'MEC',  label:'ميكانيكي', color:'#ce93d8' },
-  { key:'ELE',  label:'كهربائي',  color:'#ef9a9a' },
+  { key:'AR',  label:'معماري',   color:'#4caf50' },
+  { key:'SC',  label:'إنشائي',   color:'#64b5f6' },
+  { key:'SU',  label:'مساحة',    color:'#ffb74d' },
+  { key:'ME',  label:'ميكانيكي', color:'#ce93d8' },
+  { key:'EL',  label:'كهربائي',  color:'#ef9a9a' },
   { key:'GEN', label:'عام',      color:'#8b949e' },
 ]
 
@@ -39,13 +40,13 @@ const STATUS_BG: Record<string,{bg:string;color:string}> = {
   P:{ bg:'#444',    color:'#ccc' },
 }
 const EL_COLOR: Record<string,string> = {
-  ARC:'el-ar', CIV:'el-sc', SUR:'el-su', MEC:'el-me', ELE:'el-el', GEN:'el-gen'
+  AR:'el-ar', SC:'el-sc', SU:'el-su', ME:'el-me', EL:'el-el', GEN:'el-gen'
 }
 
 const FIELDS: FieldDef[] = [
   { key:'request_no',     label:'رقم الطلب',      type:'text',   required:true },
   { key:'description',    label:'وصف الرسم',      type:'text',   required:true },
-  { key:'element',        label:'العنصر',         type:'select', required:true, options:['ARC','CIV','SUR','MEC','ELE','GEN'] },
+  { key:'element',        label:'العنصر',         type:'select', required:true, options:['AR','SC','SU','ME','EL','GEN'] },
   { key:'rev',            label:'رقم المراجعة',   type:'number' },
   { key:'submission_date',label:'تاريخ التقديم',  type:'date' },
   { key:'ac_co',          label:'حالة الاعتماد',  type:'select', options:['A','B','C','D','P'] },
@@ -114,6 +115,7 @@ function groupRows(rows: Row[]): Group[] {
 
 export default function ShopDrawingsPage() {
   const supabase = createClient()
+  const { isAdmin, isEditor } = useRole()
 
   const [activeEl, setActiveEl]     = useState('ALL')
   const [allRows, setAllRows]       = useState<Row[]>([])
@@ -139,6 +141,10 @@ export default function ShopDrawingsPage() {
 
   // Dialogs
   const [confirmC, setConfirmC]     = useState<Row|null>(null)
+
+  const [newRevNo,  setNewRevNo]    = useState('')
+  const [newRevDesc,setNewRevDesc]  = useState('')
+  const [newRevEl,  setNewRevEl]    = useState('')
   const [confirmDel, setConfirmDel]       = useState<Row|null>(null)
   const [deleting, setDeleting]           = useState(false)
   const [deleteBlockRow, setDeleteBlockRow] = useState<Row|null>(null)
@@ -186,11 +192,12 @@ export default function ShopDrawingsPage() {
     let filtered = rows
 
     // Apply column filters
-    filtered = filtered.filter(r => {
+   filtered = filtered.filter(r => {
       for (const [col, val] of Object.entries(colFilters)) {
         if (!val) continue
-        const rv = String(((r as unknown) as Record<string,unknown>)[col] ?? '').toLowerCase()
-        if (!rv.includes(val.toLowerCase())) return false
+        const rv = String((r as unknown as Record<string,unknown>)[col] ?? '').toLowerCase()
+        const vstr = String(val).toLowerCase()
+        if (!rv.includes(vstr)) return false
       }
       return true
     })
@@ -269,9 +276,8 @@ export default function ShopDrawingsPage() {
 
   function getColOptions(col: string): string[] {
     const vals = new Set<string>()
-    for (const r of allRows) {
-      // Cast via unknown to satisfy TypeScript when indexing by dynamic column name
-      const v = String((r as unknown as Record<string, unknown>)[col] ?? '').trim()
+     for (const r of allRows) {
+      const v = String(((r as unknown) as Record<string,unknown>)[col] ?? '').trim()
       if (v) vals.add(v)
     }
     return Array.from(vals).sort()
@@ -389,19 +395,19 @@ export default function ShopDrawingsPage() {
         title="رسومات التنفيذ — Shop Drawing Submittal"
         sub={`MURCIA-2 Zone 06 · إجمالي ${counts.ALL ?? 0} رسم`}
         actions={<>
-          <button className="btn btn-ghost btn-sm" onClick={exportExcel}>
+          {/* {isAdmin && <button className="btn btn-ghost btn-sm" onClick={exportExcel}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
             تصدير Excel
-          </button>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
+          </button>} */}
+          {isEditor && <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
-            إضافة مخطط
-          </button>
+            إضافة رسم
+          </button>}
         </>}
       />
 
@@ -633,6 +639,8 @@ export default function ShopDrawingsPage() {
                             </div>
                           ) : (
                             <div style={{ display:'flex', gap:4 }}>
+                              {isEditor && 
+                              <>
                               <button className={styles.btnEdit} onClick={() => startEdit(row)}>
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -647,7 +655,8 @@ export default function ShopDrawingsPage() {
                                   <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
                                   <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
                                 </svg>
-                              </button>
+                              </button></>
+                              }
                             </div>
                           )}
                         </td>

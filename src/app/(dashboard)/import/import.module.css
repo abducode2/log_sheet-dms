@@ -2,7 +2,7 @@
 .dropzone {
   border: 2px dashed var(--border2);
   border-radius: var(--radius-xl);
-  padding: 60px 40px;
+  padding: 64px 40px;
   text-align: center;
   cursor: pointer;
   transition: all .2s;
@@ -12,25 +12,31 @@
   border-color: var(--blue);
   background: #1f6feb11;
 }
-.dropTitle { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
-.dropSub   { font-size: 12px; color: var(--text2); }
-.errorMsg  { font-size: 12px; color: var(--red); margin-top: 16px; }
+.dropTitle { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+.dropSub   { font-size: 13px; color: var(--text2); margin-bottom: 12px; }
+.dropHint  {
+  font-size: 11px; color: var(--text3);
+  max-width: 600px; margin: 0 auto;
+  line-height: 1.7;
+}
+.errMsg { font-size: 12px; color: var(--red); margin-top: 16px; }
 
 .loading {
   display: flex; align-items: center; justify-content: center;
   gap: 16px; padding: 80px; font-size: 14px; color: var(--text2);
 }
 
-.previewHeader {
+.previewBar {
   display: flex; align-items: flex-start;
-  justify-content: space-between; margin-bottom: 24px; gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 20px; gap: 16px;
 }
 .previewTitle { font-size: 16px; font-weight: 600; }
 .previewSub   { font-size: 12px; color: var(--text2); margin-top: 4px; }
 
 .sheetGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: 10px;
 }
 .sheetCard {
@@ -39,16 +45,28 @@
   cursor: pointer; display: flex; align-items: center; gap: 12px;
   transition: all .15s;
 }
-.sheetCard:hover  { border-color: var(--border2); }
-.sheetSelected    { border-color: var(--blue); background: #1f6feb11; }
-.sheetCheck       { flex-shrink: 0; color: var(--blue); }
-.sheetLabel       { font-size: 13px; font-weight: 500; }
-.sheetCount       { font-size: 11px; color: var(--text2); margin-top: 3px;
-                    font-family: var(--mono); }
+.sheetCard:hover { border-color: var(--border2); }
+.selected { border-color: var(--blue); background: #1f6feb11; }
+.sheetCheck { flex-shrink: 0; color: var(--blue); }
+.sheetLabel { font-size: 13px; font-weight: 500; }
+.sheetMeta  { font-size: 10px; color: var(--text3); margin-top: 3px; font-family: var(--mono); }
+.sheetCount {
+  background: var(--bg4); border-radius: 10px;
+  padding: 2px 8px; font-size: 11px;
+  font-family: var(--mono); color: var(--text2);
+  flex-shrink: 0;
+}
+
+.importingWrap { max-width: 500px; margin: 40px auto; }
+.progressRow   { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.progressLabel { font-size: 13px; width: 160px; flex-shrink: 0; text-align: right; }
+.progressBar   { flex: 1; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.progressFill  { height: 100%; border-radius: 3px; transition: width .4s ease; }
+.progressStatus { width: 20px; text-align: center; font-size: 14px; }
 
 .doneHeader {
   display: flex; align-items: center; gap: 16px;
-  padding: 24px; background: var(--bg2);
+  padding: 20px 24px; background: var(--bg2);
   border: 1px solid #3fb95044; border-radius: var(--radius-lg);
   margin-bottom: 20px;
 }
@@ -57,14 +75,14 @@
 
 .resultsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 8px;
 }
 .resultCard  {
   border-radius: var(--radius); padding: 12px 14px;
   border: 1px solid var(--border);
 }
-.resultOk    { background: #3fb95011; border-color: #3fb95033; }
-.resultError { background: #f8514911; border-color: #f8514933; }
+.resultOk  { background: #3fb95011; border-color: #3fb95033; }
+.resultErr { background: #f8514911; border-color: #f8514933; }
 .resultLabel { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
-.resultMsg   { font-size: 11px; color: var(--text2); }
+.resultCount { font-size: 11px; color: var(--text2); }

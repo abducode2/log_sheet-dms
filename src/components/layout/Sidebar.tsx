@@ -1,9 +1,11 @@
 
 'use client'
 import { usePathname, useRouter } from 'next/navigation'
+import { useRole } from '@/lib/hooks/useRole'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
+// Nav will filter based on role
 const NAV_STATIC = [
   { label: 'الرئيسية', items: [
     { href:'/dashboard', label:'لوحة التحكم',   dot:'#58a6ff', countKey: null },
@@ -21,8 +23,11 @@ const NAV_STATIC = [
     { href:'/transmittal',    label:'إرسال الوثائق',        dot:'#8b949e', countKey:'document_transmittals' },
   ]},
   { label: 'المراسلات', items: [
-    { href:'/letters/rawaf-naga', label:'المقاول ← الاستشاري', dot:'#ffa657', countKey:'letters_rawaf_naga' },
-    { href:'/letters/naga-rawaf', label:'الاستشاري ← المقاول', dot:'#f85149', countKey:'letters_naga_rawaf' },
+    { href:'/letters/rawaf-naga', label:'المقاول  ← الاستشاري', dot:'#ffa657', countKey:'letters_rawaf_naga' },
+    { href:'/letters/naga-rawaf', label:'الاستشاري ← المقاول ', dot:'#f85149', countKey:'letters_naga_rawaf' },
+  ]},
+  { label: 'الإدارة', items: [
+    { href:'/users', label:'إدارة المستخدمين', dot:'#58a6ff', countKey: null, adminOnly: true },
   ]},
 ]
 
@@ -45,6 +50,7 @@ export default function Sidebar({ userEmail }: { userEmail: string }) {
   const router   = useRouter()
   const supabase = createClient()
   const [counts, setCounts] = useState<Record<string, number>>({})
+  const { isAdmin } = useRole()
 
   useEffect(() => {
     async function fetchCounts() {
@@ -79,10 +85,10 @@ export default function Sidebar({ userEmail }: { userEmail: string }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <div className="sidebar-logo-icon">P216</div>
+        <div className="sidebar-logo-icon">P179</div>
         <div>
           <div className="sidebar-logo-text">MURCIA-2 ZONE 06</div>
-          <div className="sidebar-logo-sub">شركة المقاول للمقاولات</div>
+          <div className="sidebar-logo-sub">شركة المقاول  للمقاولات</div>
         </div>
       </div>
 
@@ -93,7 +99,7 @@ export default function Sidebar({ userEmail }: { userEmail: string }) {
       {NAV_STATIC.map(section => (
         <div key={section.label} className="nav-section">
           <div className="nav-label">{section.label}</div>
-          {section.items.map(item => (
+          {section.items.filter(item => !(item as {adminOnly?:boolean}).adminOnly || isAdmin).map(item => (
             <button
               key={item.href}
               className={`nav-item ${pathname.startsWith(item.href) ? 'active' : ''}`}
