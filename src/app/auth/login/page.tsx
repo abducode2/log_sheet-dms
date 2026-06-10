@@ -82,13 +82,13 @@ export default function LoginPage() {
           >
             تسجيل الدخول
           </button>
-          <button
+          {/* <button
             className={`${styles.tab} ${mode === 'register' ? styles.tabActive : ''}`}
             onClick={() => switchMode('register')}
             type="button"
           >
             إنشاء حساب
-          </button>
+          </button> */}
         </div>
 
         {/* Form */}
@@ -161,7 +161,7 @@ export default function LoginPage() {
 
         <div className={styles.footer}>
           <span>مشروع MURCIA-2 · المنطقة 06 · الرياض</span>
-          <span>شركة الاستشاري للاستشارات الهندسية</span>
+          <span>شركة للاستشارات الهندسية</span>
         </div>
       </div>
     </div>

@@ -273,9 +273,9 @@ export default function UsersPage() {
             {addErr && <div style={{fontSize:12,color:'var(--red)',background:'#da363318',border:'1px solid #da363344',borderRadius:'var(--radius-sm)',padding:'8px 12px',marginBottom:12}}>{addErr}</div>}
             <div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:8}}>
               <button className="btn btn-ghost" onClick={()=>setShowAdd(false)}>إلغاء</button>
-              <button className="btn btn-primary" onClick={addUser} disabled={adding}>
+               <button className="btn btn-primary" onClick={addUser} disabled={adding}>
                 {adding?<span className="spinner"/>:'إنشاء الحساب'}
-              </button>
+              </button> 
             </div>
           </div>
         </div>
