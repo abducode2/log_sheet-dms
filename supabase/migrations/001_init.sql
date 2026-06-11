@@ -1,5 +1,5 @@
 -- ================================================================
---  P-179 MURCIA-2 ZONE 06  –  Supabase Database Migration
+--  P-216 HARAJ-IQC-ALRAWAF  –  Supabase Database Migration
 --  Run this in: Supabase Dashboard → SQL Editor → Run
 -- ================================================================
 

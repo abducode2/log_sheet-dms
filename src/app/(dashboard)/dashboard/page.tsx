@@ -27,7 +27,7 @@ export default async function DashboardPage() {
 
   return (
     <>
-      <Topbar title="لوحة التحكم" sub="MURCIA-2 · Zone 06 · P-179 · الرياض" />
+      <Topbar title="لوحة التحكم" sub="HARAJ-IQC-ALRAWAF · P-216 · الرياض" />
       <div className="page-content anim">
         <StatsGrid stats={stats} />
         <div className="two-col">

@@ -85,10 +85,10 @@ export default function Sidebar({ userEmail }: { userEmail: string }) {
   return (
     <aside className="sidebar">
       <div className="sidebar-logo">
-        <div className="sidebar-logo-icon">P179</div>
+        <div className="sidebar-logo-icon">P216</div>
         <div>
-          <div className="sidebar-logo-text">MURCIA-2 ZONE 06</div>
-          <div className="sidebar-logo-sub">شركة المقاول  للمقاولات</div>
+          <div className="sidebar-logo-text">HARAJ-IQC-ALRAWAF</div>
+          <div className="sidebar-logo-sub">شركة الرواف  للمقاولات</div>
         </div>
       </div>
 

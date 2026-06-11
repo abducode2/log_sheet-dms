@@ -314,13 +314,22 @@ tbody tr:hover { background: var(--bg3); }
 
 /* ── Forms ───────────────────────────────────────────────── */
 .form-group { margin-bottom: 16px; }
-.form-label { font-size: 12px; color: var(--text2); display: block; margin-bottom: 6px; }
+.form-label { 
+  font-size: 12px; 
+  color: var(--text2); 
+  display: block; 
+  margin-bottom: 6px; }
 .form-input {
   width: 100%;
-  background: var(--bg3); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 10px 14px;
-  font-size: 13px; color: var(--text);
-  font-family: inherit; outline: none; transition: border .15s;
+  background: var(--bg3);  
+  border: 1px solid var(--border);
+  border-radius: var(--radius); 
+  padding: 10px 14px;
+  font-size: 13px; 
+  color: var(--text);
+  font-family: inherit; 
+  outline: none; 
+  transition: border .15s;
 }
 .form-input:focus { border-color: var(--blue); }
 .form-select {

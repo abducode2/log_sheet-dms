@@ -68,7 +68,7 @@ export default function LoginPage() {
         <div className={styles.logo}>
           <div className={styles.logoIcon}>P179</div>
           <div>
-            <div className={styles.logoTitle}>MURCIA-2 ZONE 06</div>
+            <div className={styles.logoTitle}></div>
             <div className={styles.logoSub}>نظام إدارة وثائق المشروع</div>
           </div>
         </div>

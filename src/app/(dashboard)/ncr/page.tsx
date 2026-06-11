@@ -152,7 +152,7 @@ export default function NcrPage() {
     <>
       <Topbar
         title="تقارير عدم المطابقة — NCR"
-        sub={`MURCIA-2 Zone 06 · إجمالي ${total} تقرير`}
+        sub={`HARAJ-IQC-ALRAWAF · إجمالي ${total} تقرير`}
         actions={<>
           {/* <button className="btn btn-ghost btn-sm" onClick={exportExcel}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

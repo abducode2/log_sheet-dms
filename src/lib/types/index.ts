@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────
-//  src/lib/types/index.ts  –  All database types for P-179
+//  src/lib/types/index.ts  –  All database types for P-216
 // ─────────────────────────────────────────────────────────
 
 export type StatusCode = 'A' | 'B' | 'C' | 'D' | 'P'

@@ -43,10 +43,20 @@ const EL_COLOR: Record<string,string> = {
   ARC:'el-ar', CIV:'el-sc', SUR:'el-su', MEC:'el-me', ELE:'el-el', GEN:'el-gen'
 }
 
+const REQUEST_NO_PREFIX: Record<string, string> = {
+  ARC: 'J500-RWF-SHD-ARC-',
+  CIV: 'J500-RWF-SHD-CIV-',
+  SUR: 'J500-RWF-SHD-SUR-',
+  MEC: 'J500-RWF-SHD-MEC-',
+  ELE: 'J500-RWF-SHD-ELE-',
+  GEN: 'J500-RWF-SHD-GEN-',
+}
+
 const FIELDS: FieldDef[] = [
-  { key:'request_no',     label:'رقم الطلب',      type:'text',   required:true },
-  { key:'description',    label:'وصف الرسم',      type:'text',   required:true },
   { key:'element',        label:'العنصر',         type:'select', required:true, options:['ARC','CIV','SUR','MEC','ELE','GEN'] },
+  { key:'request_no',     label:'رقم الطلب',      type:'text',   required:true,
+    prefixDynamic: { fromField:'element', map: REQUEST_NO_PREFIX } },
+  { key:'description',    label:'وصف الرسم',      type:'text',   required:true },
   { key:'rev',            label:'رقم المراجعة',   type:'number' },
   { key:'submission_date',label:'تاريخ التقديم',  type:'date' },
   { key:'ac_co',          label:'حالة الاعتماد',  type:'select', options:['A','B','C','D','P'] },
@@ -390,7 +400,7 @@ export default function ShopDrawingsPage() {
     <>
       <Topbar
         title="رسومات التنفيذ — Shop Drawing Submittal"
-        sub={`MURCIA-2 Zone 06 · إجمالي ${counts.ALL ?? 0} رسم`}
+        sub={`HARAJ-IQC-ALRAWAF · إجمالي ${counts.ALL ?? 0} رسم`}
         actions={<>
           {/* {isAdmin && <button className="btn btn-ghost btn-sm" onClick={exportExcel}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -819,7 +829,13 @@ export default function ShopDrawingsPage() {
             </div>
             <div style={{ background:'var(--bg3)', border:'1px solid #da363333',
               borderRadius:'var(--radius)', padding:16, marginBottom:20 }}>
-              <div style={{ fontFamily:'var(--mono)', fontSize:12, color:'var(--blue)', marginBottom:4 }}>
+              <div 
+              style={{ 
+                fontFamily:'var(--mono)', 
+               
+                fontSize:12, 
+                color:'var(--blue)', 
+                marginBottom:4 }}>
                 {confirmDel.request_no}
               </div>
               <div style={{ fontSize:13, marginBottom:8 }}>{confirmDel.description}</div>

@@ -413,7 +413,7 @@ export default function InspectionPage() {
     <>
       <Topbar
         title="طلبات الفحص — Inspection Request"
-        sub={`MURCIA-2 Zone 06 · إجمالي ${counts.ALL ?? 0} طلب`}
+        sub={`HARAJ-IQC-ALRAWAF · إجمالي ${counts.ALL ?? 0} طلب`}
         actions={<>
           {/* <button className="btn btn-ghost btn-sm" onClick={exportExcel}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
