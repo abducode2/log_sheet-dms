@@ -12,19 +12,20 @@ const NAV_STATIC = [
     { href:'/import',    label:'استيراد Excel', dot:'#3fb950',  countKey: null },
   ]},
   { label: 'وثائق المشروع', items: [
-    { href:'/shop-drawings',  label:'رسومات التنفيذ - (SHD)',       dot:'#58a6ff', countKey:'shop_drawings' },
-    { href:'/materials',      label:'تقديمات المواد - (MAT)',        dot:'#3fb950', countKey:'material_submittals' },
-    { href:'/supplier',       label:'تأهيل الموردين - (PRQ)',        dot:'#d29922', countKey:'supplier_prequalifications' },
-    { href:'/inspection',     label:'طلبات الفحص - (WIR)',          dot:'#bc8cff', countKey:'inspection_requests' },
-    { href:'/cpr',            label:'طلبات الصب - (CPR)',       dot:'#f85149', countKey:'concrete_pour_requests' },
-    { href:'/rfi',            label:'طلبات الاستيضاح - (RFI)',  dot:'#39d353', countKey:'requests_for_information' },
-    { href:'/ncr',            label:'تقارير عدم المطابقة - (NCR)',  dot:'#ff7b72', countKey:'non_conformance_reports' },
-    { href:'/field-report',   label:'التقارير الميدانية - (FR)',    dot:'#8b949e', countKey:'field_reports' },
-    { href:'/transmittal',    label:'إرسال الوثائق - (DT)',        dot:'#8b949e', countKey:'document_transmittals' },
+    { href:'/shop-drawings',  label:'رسومات التنفيذ',       dot:'#58a6ff', countKey:'shop_drawings' },
+    { href:'/materials',      label:'تقديمات المواد',        dot:'#3fb950', countKey:'material_submittals' },
+    { href:'/supplier',       label:'تأهيل الموردين',        dot:'#d29922', countKey:'supplier_prequalifications' },
+    { href:'/inspection',     label:'طلبات الفحص',          dot:'#bc8cff', countKey:'inspection_requests' },
+    { href:'/cpr',            label:'طلبات الصب CPR',       dot:'#f85149', countKey:'concrete_pour_requests' },
+    { href:'/rfi',            label:'طلبات الاستيضاح RFI',  dot:'#39d353', countKey:'requests_for_information' },
+    { href:'/ncr',            label:'تقارير عدم المطابقة',  dot:'#ff7b72', countKey:'non_conformance_reports' },
+    { href:'/pouring-log',    label:'سجل الصب',                dot:'#ffa657', countKey:'pouring_log' },
+    { href:'/field-report',   label:'التقارير الميدانية',    dot:'#8b949e', countKey:'field_reports' },
+    { href:'/transmittal',    label:'إرسال الوثائق',        dot:'#8b949e', countKey:'document_transmittals' },
   ]},
   { label: 'المراسلات', items: [
-    { href:'/letters/rawaf-naga', label:'المقاول  ← الاستشاري', dot:'#ffa657', countKey:'letters_rawaf_naga' },
-    { href:'/letters/naga-rawaf', label:'الاستشاري ← المقاول ', dot:'#f85149', countKey:'letters_naga_rawaf' },
+    { href:'/letters/rawaf-naga', label:'المقاول ← الاستشاري', dot:'#ffa657', countKey:'letters_rawaf_naga' },
+    { href:'/letters/naga-rawaf', label:'الاستشاري ← المقاول', dot:'#f85149', countKey:'letters_naga_rawaf' },
   ]},
   { label: 'الإدارة', items: [
     { href:'/users', label:'إدارة المستخدمين', dot:'#58a6ff', countKey: null, adminOnly: true },
@@ -43,6 +44,7 @@ const TABLES = [
   'document_transmittals',
   'letters_rawaf_naga',
   'letters_naga_rawaf',
+  'pouring_log',
 ]
 
 export default function Sidebar({ userEmail }: { userEmail: string }) {
@@ -88,7 +90,7 @@ export default function Sidebar({ userEmail }: { userEmail: string }) {
         <div className="sidebar-logo-icon">P216</div>
         <div>
           <div className="sidebar-logo-text">HARAJ-IQC-ALRAWAF</div>
-          <div className="sidebar-logo-sub">شركة الرواف  للمقاولات</div>
+          <div className="sidebar-logo-sub">شركة المقاول للمقاولات</div>
         </div>
       </div>
 

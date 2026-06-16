@@ -1,11 +1,14 @@
+
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Topbar from '@/components/layout/Topbar'
-import { useRole } from '@/lib/hooks/useRole'
 import AddRecordModal from '@/components/forms/AddRecordModal'
 import type { FieldDef } from '@/components/forms/AddRecordModal'
 import styles from '@/app/(dashboard)/shop-drawings/page.module.css'
+import { generateForm } from '@/lib/utils/generateForm'
+import { useRole } from '@/lib/hooks/useRole'
+import { uploadToCloudinary, getCloudinaryViewerUrl } from '@/lib/utils/cloudinary'
 
 // ── Helpers ──────────────────────────────────────────────────────
 function calcVtime(sub: string | null, app: string | null): number | null {
@@ -39,16 +42,29 @@ const STATUS_BG: Record<string,{bg:string;color:string}> = {
   P:{ bg:'#444',    color:'#ccc' },
 }
 
+
 const FIELDS: FieldDef[] = [
-  { key:'cpr_no',         label:'رقم الطلب',        type:'text',   required:true },
+  { key:'cpr_no',         label:'رقم الطلب',        type:'text',   required:true,
+    prefixStatic:'J500-RWF-CPR-' },
   { key:'description',    label:'وصف العنصر',       type:'text',   required:true },
-  { key:'location',       label:'الموقع',            type:'text',   required:true },
-  { key:'element',        label:'العنصر',            type:'select', required:true, options:['CIV'] },
+  { key:'pour_date',      label:'تاريخ الصب',        type:'date',   required:true },
   { key:'rev',            label:'رقم المراجعة',      type:'number' },
-  { key:'pour_date',      label:'تاريخ الصب',        type:'date' },
   { key:'volume_m3',      label:'الحجم م³',          type:'number' },
-  { key:'mix_design',     label:'Mix Design',        type:'text' },
-  { key:'ac_co',          label:'حالة الاعتماد',     type:'select', options:['A','B','C','D','P'] },
+  { key:'mix_design', label:'Mix Design', type:'select', options:[
+    '20 MPA OPC',
+    '25 MPA OPC',
+    '30 MPA OPC',
+    '35 MPA OPC',
+    '40 MPA OPC',
+    '20 MPA SRC',
+    '35 MPA SRC',
+    'C20',
+    'C25',
+    'C30',
+    'C35',
+    'C40',
+  ]},
+  { key:'ac_co',          label:'حالة الاعتماد',     type:'select', defaultValue:'P', options:['A','B','C','D','P'] },
   { key:'approval_date',  label:'تاريخ الاعتماد',    type:'date' },
   { key:'v_time',         label:'V.Time (أيام)',     type:'number' },
   { key:'remarks',        label:'ملاحظات',           type:'textarea' },
@@ -60,10 +76,8 @@ interface Row {
   id: string
   no: number
   cpr_no: string
-  request_no: string
+  request_no?: string
   description: string
-  location: string | null
-  element: string
   rev: number
   ac_co: string
   pour_date: string | null
@@ -76,6 +90,7 @@ interface Row {
   parent_id: string | null
   is_archived: boolean
   revision_count: number
+  pdf_url: string | null
 }
 
 // Group rows: each group = root row + all its revisions
@@ -84,7 +99,6 @@ interface Group {
   rows: Row[]          // sorted by rev asc
   no: number           // display number (from first row)
   description: string
-  element: string
 }
 
 function groupRows(rows: Row[]): Group[] {
@@ -108,11 +122,10 @@ function groupRows(rows: Row[]): Group[] {
     const sorted = group.sort((a,b) => (a.rev??0) - (b.rev??0))
     const root   = sorted[0]
     return {
-      root_request_no: root.request_no,
+      root_request_no: root.cpr_no ?? String(root.no),
       rows: sorted,
       no:          root.no,
       description: root.description,
-      element:     root.element,
     }
   }).sort((a,b) => a.no - b.no)
 }
@@ -130,7 +143,7 @@ export default function CprPage() {
   const [filterSt, setFilterSt]     = useState('')
   // Column filters (Excel-style)
   const [colFilters, setColFilters] = useState<Record<string,string>>({
-    cpr_no: '', description: '', location: '', element: '', pour_date: '', ac_co: '', rev: ''
+    cpr_no: '', description: '', rev: '', pour_date: '', volume_m3: '', mix_design: '', ac_co: ''
   })
   const [openCol, setOpenCol]       = useState<string|null>(null)
   const [loading, setLoading]       = useState(true)
@@ -141,51 +154,35 @@ export default function CprPage() {
   const [editSt, setEditSt]         = useState('')
   const [editDate, setEditDate]     = useState('')
   const [editVtime, setEditVtime]   = useState('')
-  const [editVolume, setEditVolume] = useState('')
-  const [editMix, setEditMix]       = useState('')
   const [saving, setSaving]         = useState(false)
 
   // Dialogs
   const [confirmC, setConfirmC]     = useState<Row|null>(null)
 
+  const [newRevNo,  setNewRevNo]    = useState('')
+  const [newRevDesc,setNewRevDesc]  = useState('')
+  const [newRevEl,  setNewRevEl]    = useState('')
   const [confirmDel, setConfirmDel]       = useState<Row|null>(null)
   const [deleting, setDeleting]           = useState(false)
   const [deleteBlockRow, setDeleteBlockRow] = useState<Row|null>(null)
   const [deleteBlockRevs, setDeleteBlockRevs] = useState<Row[]>([])
 
+  const [uploadingId, setUploadingId] = useState<string|null>(null)
+  const [viewingPdf, setViewingPdf]   = useState<{url:string;name:string;directUrl?:string}|null>(null)
+
   // Fetch counts (only root/non-archived for tab counts)
   const fetchCounts = useCallback(async () => {
     const { data } = await supabase
       .from('concrete_pour_requests')
-      .select('id, parent_id, ac_co, is_archived, rev')
+      .select('id, parent_id, ac_co')
     if (!data) return
-    const rows = data as { id: string; parent_id: string | null; ac_co: string; is_archived: boolean; rev: number }[]
-
-    const idMap: Record<string, typeof rows[number]> = {}
-    for (const r of rows) idMap[r.id] = r
-
-    function getRootId(row: typeof rows[number]): string {
-      if (!row.parent_id || !idMap[row.parent_id]) return row.id
-      return getRootId(idMap[row.parent_id])
-    }
-
-    const groups: Record<string, typeof rows[number][]> = {}
-    for (const r of rows) {
-      const rootId = getRootId(r)
-      if (!groups[rootId]) groups[rootId] = []
-      groups[rootId].push(r)
-    }
-
+    const rows = data as { id: string; parent_id: string | null; ac_co: string }[]
     const c: Record<string, number> = { ALL: 0 }
-    for (const group of Object.values(groups)) {
-      const current = group
-        .filter(r => !r.is_archived)
-        .sort((a,b) => (b.rev ?? 0) - (a.rev ?? 0))[0]
-      if (!current) continue
-      const status = (current.ac_co ?? '').toString().trim().toUpperCase()
-      if (!status) continue
-      c['ALL'] = (c['ALL'] ?? 0) + 1
-      c[status] = (c[status] ?? 0) + 1
+    for (const r of rows) {
+      if (!r.parent_id) {
+        c['ALL'] = (c['ALL'] ?? 0) + 1
+        c[r.ac_co] = (c[r.ac_co] ?? 0) + 1
+      }
     }
     setCounts(c)
   }, [])
@@ -198,7 +195,7 @@ export default function CprPage() {
     let q = supabase
       .from('concrete_pour_requests')
       .select('*')
-      .order('request_no', { ascending: true })
+      .order('no', { ascending: true })
       .order('rev', { ascending: true })
 
     // CPR is always SC — filter by status tab
@@ -212,7 +209,7 @@ export default function CprPage() {
     let filtered = rows
 
     // Apply column filters
-    filtered = filtered.filter(r => {
+   filtered = filtered.filter(r => {
       for (const [col, val] of Object.entries(colFilters)) {
         if (!val) continue
         const rv = String((r as unknown as Record<string,unknown>)[col] ?? '').toLowerCase()
@@ -228,11 +225,9 @@ export default function CprPage() {
         rows
           .filter(r =>
             (r.cpr_no          ?? '').toLowerCase().includes(s) ||
-            (r.request_no      ?? '').toLowerCase().includes(s) ||
             (r.description     ?? '').toLowerCase().includes(s) ||
-            (r.location        ?? '').toLowerCase().includes(s) ||
             (r.mix_design      ?? '').toLowerCase().includes(s) ||
-            (r.element         ?? '').toLowerCase().includes(s) ||
+            (r.description     ?? '').toLowerCase().includes(s) ||
             (r.ac_co           ?? '').toLowerCase().includes(s) ||
             (r.pour_date       ?? '').toLowerCase().includes(s) ||
             String(r.rev ?? '').includes(s)
@@ -299,7 +294,7 @@ export default function CprPage() {
 
   function getColOptions(col: string): string[] {
     const vals = new Set<string>()
-      for (const r of allRows) {
+     for (const r of allRows) {
       const v = String(((r as unknown) as Record<string,unknown>)[col] ?? '').trim()
       if (v) vals.add(v)
     }
@@ -318,8 +313,6 @@ export default function CprPage() {
     setEditSt(row.ac_co ?? 'P')
     setEditDate(row.approval_date ?? '')
     setEditVtime(row.v_time?.toString() ?? '')
-    setEditVolume(row.volume_m3?.toString() ?? '')
-    setEditMix(row.mix_design ?? '')
   }
 
   function onEditDateChange(d: string) {
@@ -347,9 +340,6 @@ export default function CprPage() {
         ac_co: 'C',
         approval_date: editDate || null,
         v_time: editVtime ? Number(editVtime) : null,
-        mix_design: editMix || row.mix_design || null,
-        volume_m3:  editVolume ? Number(editVolume) : row.volume_m3 ?? null,
-
         is_archived: true,
       }).eq('id', id)
 
@@ -360,18 +350,13 @@ export default function CprPage() {
       await supabase.from('concrete_pour_requests').insert({
         id:              newId,
         no:              nextNo,
-        cpr_no:          row.cpr_no ?? row.request_no,
-        request_no:      row.cpr_no ?? row.request_no,
+        cpr_no:          row.cpr_no ?? '',
         description:     row.description,
-        location:        row.location,
-        element:         'CIV',
         rev:             nextRev,
         ac_co:           'P',
         pour_date:       today(),
         approval_date:   null,
         v_time:          null,
-        mix_design:      editMix || row.mix_design || null,
-        volume_m3:       editVolume ? Number(editVolume) : row.volume_m3 ?? null,
         remarks:         row.remarks,
         parent_id:       id,
         is_archived:     false,
@@ -383,9 +368,15 @@ export default function CprPage() {
         ac_co:         editSt,
         approval_date: editDate || null,
         v_time:        editVtime ? Number(editVtime) : null,
-        mix_design:    editMix || null,
-        volume_m3:     editVolume ? Number(editVolume) : null,
       }).eq('id', id)
+
+      // Sync status to pouring_log if linked by cpr_no
+      const row = allRows.find(r => r.id === id)
+      if (row?.cpr_no) {
+        await supabase.from('pouring_log')
+          .update({ remarks: `حالة CPR: ${editSt}` })
+          .eq('cpr_no', row.cpr_no)
+      }
     }
 
     setEditingId(null); setConfirmC(null)
@@ -428,41 +419,20 @@ export default function CprPage() {
     <>
       <Topbar
         title="طلبات الصب — Concrete Pour Request"
-        sub={`HARAJ-IQC-ALRAWAF · إجمالي ${counts.ALL ?? 0} طلب · انتظار ${counts.P ?? 0}`}
+        sub={`HARAJ-IQC-ALRAWAF · إجمالي ${counts.ALL ?? 0} طلب`}
         actions={<>
-          {/* <button className="btn btn-ghost btn-sm" onClick={exportExcel}>
+          
+          <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
-            تصدير Excel
-          </button> */}
-          {isEditor && (
-            <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-              إضافة طلب صب
-            </button>
-          )}
+            إضافة طلب صب
+          </button>
         </>}
       />
 
       <div className="page-content">
 
-        {/* Element Tabs */}
-        <div className={styles.tabs}>
-          {ELEMENTS.map(el => (
-            <button key={el.key}
-              className={`${styles.tab} ${activeEl === el.key ? styles.tabActive : ''}`}
-              onClick={() => { setActiveEl(el.key) }}
-              style={activeEl === el.key ? { borderColor: el.color, color: el.color } : {}}>
-              <span className={styles.tabDot} style={{ background: el.color }}/>
-              {el.label}
-              <span className={styles.tabCount}>{counts[el.key] ?? 0}</span>
-            </button>
-          ))}
-        </div>
 
         {/* Toolbar */}
         <div className="toolbar" onClick={() => setOpenCol(null)}>
@@ -475,7 +445,7 @@ export default function CprPage() {
           </div>
           {Object.values(colFilters).some(v => v) && (
             <button className="btn btn-ghost btn-sm" onClick={() =>
-              setColFilters({ cpr_no:'', description:'', location:'', element:'', pour_date:'', ac_co:'', rev:'' })
+              setColFilters({ cpr_no:'', description:'', rev:'', pour_date:'', volume_m3:'', mix_design:'', ac_co:'' })
             }>
               ✕ مسح الفلاتر
             </button>
@@ -499,7 +469,7 @@ export default function CprPage() {
                   {[
                     { key:'cpr_no',      label:'رقم CPR',        w:undefined },
                     { key:'description', label:'وصف العنصر',     w:undefined },
-                    { key:'location',    label:'الموقع',          w:110 },
+                    
                     { key:'rev',         label:'Rev.',            w:55 },
                     { key:'pour_date',   label:'تاريخ الصب',     w:undefined },
                     { key:'ac_co',       label:'الحالة',         w:130 },
@@ -550,11 +520,12 @@ export default function CprPage() {
                       </div>
                     </th>
                   ))}
-                  <th>تاريخ الاعتماد</th>
+                  <th style={{width:120}}>تاريخ الاعتماد</th>
                   <th style={{width:70}}>V.Time</th>
-                  <th style={{width:70}}>م³</th>
+                   <th style={{width:70}}>الكمية م³</th>
                   <th style={{width:100}}>Mix Design</th>
-                  <th style={{width:120}}>إجراء</th>
+                  <th style={{width:120 }}>إجراء</th>
+                  <th style={{width:90}}>PDF</th>
                 </tr>
               </thead>
               <tbody>
@@ -562,7 +533,8 @@ export default function CprPage() {
                   <tr><td colSpan={12}>
                     <div className="loading-overlay"><div className="spinner"/><span>جارٍ التحميل...</span></div>
                   </td></tr>
-                ) : groups.length === 0 ? (
+                ) : 
+                groups.length === 0 ? (
                   <tr><td colSpan={12}>
                     <div className="empty-state">
                       <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
@@ -605,19 +577,36 @@ export default function CprPage() {
                           </span>
                         </td>
 
-                        {/* location */}
-                        <td style={{ fontSize:11, color:'var(--text2)' }}>{row.location ?? '—'}</td>
 
-                        {/* element — always SC */}
-                        {/* <td>
-                          <span className="el-badge el-sc">CIV</span>
-                        </td> */}
 
                         {/* Rev */}
                         <td className="cell-mono cell-muted">{row.rev}</td>
 
                         {/* Pour date */}
                         <td className="cell-mono cell-muted">{row.pour_date ?? '—'}</td>
+
+                      
+
+                        {/* mix_design */}
+                        {/* <td>
+                          {isEditing ? (
+                            <select className="form-select" style={{ padding:'4px 8px', fontSize:11 }}
+                              defaultValue={row.mix_design ?? ''}>
+                              <option value="">— اختر —</option>
+                              {['20 MPA OPC','25 MPA OPC','30 MPA OPC','35 MPA OPC','40 MPA OPC','20 MPA SRC','35 MPA SRC','C20','C25','C30','C35','C40'].map(m=>(
+                                <option key={m} value={m}>{m}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <span style={{
+                              fontSize:10, padding:'2px 7px', borderRadius:4,
+                              background:'var(--bg3)', border:'1px solid var(--border)',
+                              fontFamily:'var(--mono)', color:'var(--purple)', whiteSpace:'nowrap'
+                            }}>
+                              {row.mix_design ?? '—'}
+                            </span>
+                          )}
+                        </td> */}
 
                         {/* Status — solid color like screenshot */}
                         <td style={{ padding:'6px 14px' }}>
@@ -670,24 +659,29 @@ export default function CprPage() {
                         </td>
 
                         {/* volume_m3 */}
-                        <td className="cell-mono" style={{ color:'var(--text2)' }}>
-                          {isEditing ? (
-                            <input type="number" className="form-input"
-                              style={{ padding:'4px 8px', fontSize:11, width:80 }}
-                              value={editVolume} onChange={e => setEditVolume(e.target.value)} />
-                          ) : (
-                            row.volume_m3 != null ? `${row.volume_m3} م³` : '—'
-                          )}
+                        <td className="cell-mono" style={{ color:'var(--orange)',
+                           fontWeight:600 }}>
+                          {row.volume_m3 != null ? `${row.volume_m3} م³` : '—'}
                         </td>
-
+                     
                         {/* mix_design */}
-                        <td style={{ fontSize:11, color:'var(--text2)' }}>
+                        <td>
                           {isEditing ? (
-                            <input type="text" className="form-input"
-                              style={{ padding:'4px 8px', fontSize:11, width:120 }}
-                              value={editMix} onChange={e => setEditMix(e.target.value)} />
+                            <select className="form-select" style={{ padding:'4px 8px', fontSize:11 }}
+                              defaultValue={row.mix_design ?? ''}>
+                              <option value="">— اختر —</option>
+                              {['20 MPA OPC','25 MPA OPC','30 MPA OPC','35 MPA OPC','40 MPA OPC','20 MPA SRC','35 MPA SRC','C20','C25','C30','C35','C40'].map(m=>(
+                                <option key={m} value={m}>{m}</option>
+                              ))}
+                            </select>
                           ) : (
-                            row.mix_design ?? '—'
+                            <span style={{
+                              fontSize:10, padding:'2px 7px', borderRadius:4,
+                              background:'var(--bg3)', border:'1px solid var(--border)',
+                              fontFamily:'var(--mono)', color:'var(--purple)', whiteSpace:'nowrap'
+                            }}>
+                              {row.mix_design ?? '—'}
+                            </span>
                           )}
                         </td>
 
@@ -702,27 +696,115 @@ export default function CprPage() {
                               <button className={styles.btnCancel} onClick={() => setEditingId(null)}>✕</button>
                             </div>
                           ) : (
-                            (isEditor || isAdmin) ? (
-                              <div style={{ display:'flex', gap:4 }}>
-                                <button className={styles.btnEdit} onClick={() => startEdit(row)}>
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                                  </svg>
-                                  تعديل
+                            <div style={{ display:'flex', gap:4 }}>
+                              <button className={styles.btnEdit} onClick={() => startEdit(row)}>
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                </svg>
+                                تعديل
+                              </button>
+                              <button className={styles.btnDel}
+                                onClick={() => setConfirmDel(row)} title="حذف">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <polyline points="3 6 5 6 21 6"/>
+                                  <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                                  <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
+                                </svg>
+                              </button>
+                            </div>
+                          )}
+                        </td>
+
+                        {/* PDF Cell */}
+                        <td style={{textAlign:'center', padding:'6px 8px'}}>
+                          {uploadingId === row.id ? (
+                            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
+                              <div className="spinner" style={{width:16,height:16}}/>
+                              <span style={{fontSize:9,color:'var(--text3)'}}>جارٍ الرفع...</span>
+                            </div>
+                          ) : row.pdf_url ? (
+                            <div style={{display:'flex',flexDirection:'column',gap:3,alignItems:'center'}}>
+                              <button
+                                onClick={() => setViewingPdf({
+                                  url: getCloudinaryViewerUrl(row.pdf_url!),
+                                  name: row.cpr_no ?? String(row.no),
+                                  directUrl: row.pdf_url!
+                                })}
+                                style={{
+                                  display:'inline-flex', alignItems:'center', gap:4,
+                                  padding:'4px 8px', borderRadius:4,
+                                  background:'#da363318', border:'1px solid #da363344',
+                                  color:'var(--red)', fontSize:11, cursor:'pointer',
+                                  fontFamily:'inherit', whiteSpace:'nowrap'
+                                }}
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                  <polyline points="14 2 14 8 20 8"/>
+                                </svg>
+                                عرض
+                              </button>
+                              {(isEditor || isAdmin) && (
+                                <button
+                                  onClick={async () => {
+                                    if (!confirm('هل أنت متأكد من حذف ملف PDF؟')) return
+                                    await fetch('/api/cloudinary-delete', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ url: row.pdf_url }),
+                                    })
+                                    const { error } = await supabase
+                                      .from('concrete_pour_requests')
+                                      .update({ pdf_url: null })
+                                      .eq('id', row.id)
+                                    if (error) { alert('خطأ في الحذف: ' + error.message); return }
+                                    setAllRows(prev => {
+                                      const next = prev.map(r => r.id===row.id ? {...r, pdf_url:null} : r)
+                                      setGroups(groupRows(next))
+                                      return next
+                                    })
+                                  }}
+                                  style={{fontSize:9,color:'var(--red)',cursor:'pointer',textDecoration:'underline',
+                                    background:'transparent',border:'none',fontFamily:'inherit',padding:0}}
+                                >
+                                  حذف
                                 </button>
-                                <button className={styles.btnDel}
-                                  onClick={() => setConfirmDel(row)} title="حذف">
-                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                    <polyline points="3 6 5 6 21 6"/>
-                                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
-                                    <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
-                                  </svg>
-                                </button>
-                              </div>
-                            ) : (
-                              <span style={{ color:'var(--text2)', fontSize:11 }}>غير مصرح</span>
-                            )
+                              )}
+                            </div>
+                          ) : (isEditor || isAdmin) ? (
+                            <label style={{
+                              display:'inline-flex', alignItems:'center', gap:4,
+                              padding:'4px 8px', borderRadius:4,
+                              background:'var(--bg3)', border:'1px solid var(--border)',
+                              color:'var(--text2)', fontSize:11, cursor:'pointer',
+                              whiteSpace:'nowrap'
+                            }} title="رفع PDF إلى Cloudinary">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                              </svg>
+                              رفع PDF
+                              <input type="file" accept="application/pdf" style={{display:'none'}}
+                                onChange={async e => {
+                                  const file = e.target.files?.[0]
+                                  if (!file) return
+                                  setUploadingId(row.id)
+                                  const { url, error } = await uploadToCloudinary(file, 'p179/concrete-pour-requests')
+                                  if (error) { alert('خطأ في الرفع: ' + error); setUploadingId(null); return }
+                                  await supabase.from('concrete_pour_requests').update({ pdf_url: url }).eq('id', row.id)
+                                  setAllRows(prev => {
+                                    const next = prev.map(r => r.id===row.id ? {...r, pdf_url:url} : r)
+                                    setGroups(groupRows(next))
+                                    return next
+                                  })
+                                  setUploadingId(null)
+                                  e.target.value = ''
+                                }}/>
+                            </label>
+                          ) : (
+                            <span style={{color:'var(--text3)',fontSize:10}}>—</span>
                           )}
                         </td>
                       </tr>
@@ -735,14 +817,104 @@ export default function CprPage() {
         </div>
       </div>
 
+      {/* PDF Viewer Modal */}
+      {viewingPdf && (
+        <div style={{
+          position:'fixed', inset:0, background:'rgba(0,0,0,.85)',
+          zIndex:200, display:'flex', flexDirection:'column',
+        }}>
+          <div style={{
+            height:48, background:'var(--bg2)', borderBottom:'1px solid var(--border)',
+            display:'flex', alignItems:'center', gap:12, padding:'0 16px', flexShrink:0
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            <span style={{fontSize:13, fontWeight:600, color:'var(--text)', flex:1}}>
+              {viewingPdf.name}
+            </span>
+            <a
+              href={viewingPdf.directUrl ?? viewingPdf.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display:'inline-flex', alignItems:'center', gap:6,
+                padding:'6px 12px', borderRadius:6,
+                background:'var(--accent)', color:'#fff',
+                fontSize:12, textDecoration:'none'
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              تنزيل
+            </a>
+            <button
+              onClick={() => setViewingPdf(null)}
+              style={{
+                background:'transparent', border:'1px solid var(--border)',
+                borderRadius:6, padding:'6px 12px',
+                color:'var(--text2)', cursor:'pointer', fontSize:12
+              }}
+            >
+              ✕ إغلاق
+            </button>
+          </div>
+          <iframe
+            src={viewingPdf.url}
+            style={{ flex:1, border:'none', width:'100%' }}
+            title="PDF Viewer"
+          />
+        </div>
+      )}
+
       {/* Add Modal */}
       {showAdd && (
         <AddRecordModal
           table="concrete_pour_requests" title="إضافة طلب صب جديد"
           fields={FIELDS} onClose={() => setShowAdd(false)}
-          onSaved={() => { fetchData(); fetchCounts() }}
+          onSaved={async () => {
+            // Get the last inserted CPR row
+            const { data: last } = await supabase
+              .from('concrete_pour_requests')
+              .select('*')
+              .order('created_at', { ascending: false })
+              .limit(1)
+            /*  */
+            // if (last?.[0]) {
+            //   const cpr = last[0]
+            //   // Get next pouring_log no
+            //   const { data: lastLog } = await supabase
+            //     .from('pouring_log')
+            //     .select('no')
+            //     .order('no', { ascending: false })
+            //     .limit(1)
+            //   const nextNo = ((lastLog?.[0]?.no ?? 0) as number) + 1
+
+            //   // Build description from CPR data
+            //   const desc = [
+            //     cpr.description,
+            //     cpr.mix_design,
+            //   ].filter(Boolean).join(' — ')
+
+            //   await supabase.from('pouring_log').insert({
+            //     no:            nextNo,
+                
+            //     cast_date:     cpr.pour_date ?? null,
+            //     cpr_no:        cpr.cpr_no ?? null,
+            //     description:   desc || cpr.description || null,
+            //     grade:         cpr.mix_design ?? null,
+            //     quantity_m3:   cpr.volume_m3 ?? null,
+            //     remarks:       cpr.remarks ?? null,
+            //   })
+            // }
+
+            fetchData(); fetchCounts()
+          }}
           autoNumber={{ field:'no', getNext: getNextNo }}
-          fixedValues={{ element: 'CIV' }}
+          onSaveAndGenerate={record => generateForm({ docType:'CPR', titleAr:'طلب صب خرساني', fields:FIELDS, record })}
         />
       )}
 
@@ -893,7 +1065,7 @@ export default function CprPage() {
               </div>
               <div style={{ fontSize:13, marginBottom:8 }}>{confirmDel.description}</div>
               <div style={{ fontSize:11, color:'var(--text3)' }}>
-                REV.{confirmDel.rev} · {confirmDel.location ?? ''} · {confirmDel.element} · {confirmDel.ac_co}
+                REV.{confirmDel.rev}  · {confirmDel.ac_co}
               </div>
             </div>
             <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>

@@ -6,6 +6,8 @@ import Topbar from '@/components/layout/Topbar'
 import AddRecordModal from '@/components/forms/AddRecordModal'
 import type { FieldDef } from '@/components/forms/AddRecordModal'
 import styles from './page.module.css'
+import { generateSHDForm } from '@/lib/utils/generateSHD'
+import { uploadToCloudinary, getCloudinaryViewerUrl } from '@/lib/utils/cloudinary'
 import { useRole } from '@/lib/hooks/useRole'
 
 // ── Helpers ──────────────────────────────────────────────────────
@@ -51,19 +53,19 @@ const REQUEST_NO_PREFIX: Record<string, string> = {
   ELE: 'J500-RWF-SHD-ELE-',
   GEN: 'J500-RWF-SHD-GEN-',
 }
-
-const FIELDS: FieldDef[] = [
+const FIELDS = [
   { key:'element',        label:'العنصر',         type:'select', required:true, options:['ARC','CIV','SUR','MEC','ELE','GEN'] },
-  { key:'request_no',     label:'رقم الطلب',      type:'text',   required:true,
-    prefixDynamic: { fromField:'element', map: REQUEST_NO_PREFIX } },
+  { key:'request_no',     label:'رقم الطلب',      type:'text',   required:true, 
+    prefixDynamic:{ fromField:'element', map: REQUEST_NO_PREFIX } },
   { key:'description',    label:'وصف الرسم',      type:'text',   required:true },
   { key:'rev',            label:'رقم المراجعة',   type:'number' },
-  { key:'submission_date',label:'تاريخ التقديم',  type:'date' },
-  { key:'ac_co',          label:'حالة الاعتماد',  type:'select', options:['A','B','C','D','P'] },
+  { key:'submission_date',label:'تاريخ التقديم',  type:'date', required:true },
+  { key:'ac_co',          label:'حالة الاعتماد',  type:'select', defaultValue:'P', options:['A','B','C','D','P'] },
   { key:'approval_date',  label:'تاريخ الاعتماد', type:'date' },
   { key:'v_time',         label:'V.Time (أيام)',  type:'number' },
   { key:'remarks',        label:'ملاحظات',        type:'textarea' },
-]
+] as FieldDef[]
+
 
 const PG = 20
 
@@ -82,6 +84,7 @@ interface Row {
   parent_id: string | null
   is_archived: boolean
   revision_count: number
+  pdf_url: string | null
 }
 
 // Group rows: each group = root row + all its revisions
@@ -154,6 +157,9 @@ export default function ShopDrawingsPage() {
 
   const [confirmDel, setConfirmDel]       = useState<Row|null>(null)
   const [deleting, setDeleting]           = useState(false)
+  const [localPdfs, setLocalPdfs]         = useState<Record<string,string>>({})
+  const [viewingPdf, setViewingPdf]       = useState<{url:string;name:string;directUrl?:string}|null>(null)
+  const [uploadingId, setUploadingId]     = useState<string|null>(null)
   const [deleteBlockRow, setDeleteBlockRow] = useState<Row|null>(null)
   const [deleteBlockRevs, setDeleteBlockRevs] = useState<Row[]>([])
 
@@ -199,12 +205,11 @@ export default function ShopDrawingsPage() {
     let filtered = rows
 
     // Apply column filters
-   filtered = filtered.filter(r => {
+    filtered = filtered.filter(r => {
       for (const [col, val] of Object.entries(colFilters)) {
         if (!val) continue
         const rv = String((r as unknown as Record<string,unknown>)[col] ?? '').toLowerCase()
-        const vstr = String(val).toLowerCase()
-        if (!rv.includes(vstr)) return false
+        if (!rv.includes(val.toLowerCase())) return false
       }
       return true
     })
@@ -257,7 +262,7 @@ export default function ShopDrawingsPage() {
           matchingRoots.add(cur.id)
         }
       }
-      filtered = filtered.filter(r => {
+       filtered = filtered.filter(r => {
         let cur = r
         while (cur.parent_id && filtered.find(x => x.id === cur.parent_id)) {
           cur = filtered.find(x => x.id === cur.parent_id)!
@@ -283,8 +288,8 @@ export default function ShopDrawingsPage() {
 
   function getColOptions(col: string): string[] {
     const vals = new Set<string>()
-     for (const r of allRows) {
-      const v = String(((r as unknown) as Record<string,unknown>)[col] ?? '').trim()
+    for (const r of allRows) {
+      const v = String((r as unknown as Record<string,unknown>)[col] ?? '').trim()
       if (v) vals.add(v)
     }
     return Array.from(vals).sort()
@@ -385,16 +390,7 @@ export default function ShopDrawingsPage() {
     fetchData(); fetchCounts()
   }
 
-  async function exportExcel() {
-    let q = supabase.from('shop_drawings').select('*').order('no')
-    if (activeEl !== 'ALL') q = q.eq('element', activeEl)
-    const { data: all } = await q
-    const XLSX = await import('xlsx')
-    const ws = XLSX.utils.json_to_sheet(all ?? [])
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Shop Drawings')
-    XLSX.writeFile(wb, `shop_drawings_P179.xlsx`)
-  }
+ 
 
   return (
     <>
@@ -402,13 +398,6 @@ export default function ShopDrawingsPage() {
         title="رسومات التنفيذ — Shop Drawing Submittal"
         sub={`HARAJ-IQC-ALRAWAF · إجمالي ${counts.ALL ?? 0} رسم`}
         actions={<>
-          {/* {isAdmin && <button className="btn btn-ghost btn-sm" onClick={exportExcel}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            تصدير Excel
-          </button>} */}
           {isEditor && <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
@@ -523,6 +512,7 @@ export default function ShopDrawingsPage() {
                   <th>تاريخ الاعتماد</th>
                   <th style={{width:70}}>V.Time</th>
                   <th style={{width:120}}>إجراء</th>
+                  <th style={{width:90}}>PDF</th>
                 </tr>
               </thead>
               <tbody>
@@ -662,11 +652,107 @@ export default function ShopDrawingsPage() {
                                   <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
                                   <path d="M10 11v6M14 11v6M9 6V4h6v2"/>
                                 </svg>
-                              </button></>
+                              </button>
+                              </>
                               }
                             </div>
                           )}
                         </td>
+
+                        {/* PDF Cell — Cloudinary */}
+                        <td style={{textAlign:'center', padding:'6px 8px'}}>
+                          {uploadingId === row.id ? (
+                            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
+                              <div className="spinner" style={{width:16,height:16}}/>
+                              <span style={{fontSize:9,color:'var(--text3)'}}>جارٍ الرفع...</span>
+                            </div>
+                          ) : row.pdf_url ? (
+                            <div style={{display:'flex',flexDirection:'column',gap:3,alignItems:'center'}}>
+                              <button
+                                onClick={() => setViewingPdf({
+                                  url: getCloudinaryViewerUrl(row.pdf_url!),
+                                  name: row.request_no ?? 'document',
+                                  directUrl: row.pdf_url!
+                                })}
+                                style={{
+                                  display:'inline-flex', alignItems:'center', gap:4,
+                                  padding:'4px 8px', borderRadius:4,
+                                  background:'#da363318', border:'1px solid #da363344',
+                                  color:'var(--red)', fontSize:11, cursor:'pointer',
+                                  fontFamily:'inherit', whiteSpace:'nowrap'
+                                }}
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                  <polyline points="14 2 14 8 20 8"/>
+                                </svg>
+                                عرض
+                              </button>
+                              {isEditor && (
+                                <button
+                                  onClick={async () => {
+                                    if (!confirm('هل أنت متأكد من حذف ملف PDF؟')) return
+                                    // حذف من Cloudinary
+                                    await fetch('/api/cloudinary-delete', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ url: row.pdf_url }),
+                                    })
+                                    // حذف الرابط من قاعدة البيانات
+                                    const { error } = await supabase
+                                      .from('shop_drawings')
+                                      .update({ pdf_url: null })
+                                      .eq('id', row.id)
+                                    if (error) { alert('خطأ في الحذف: ' + error.message); return }
+                                    setAllRows(prev => {
+                                      const next = prev.map(r => r.id===row.id ? {...r, pdf_url:null} : r)
+                                      setGroups(groupRows(next))
+                                      return next
+                                    })
+                                  }}
+                                  style={{fontSize:9,color:'var(--red)',cursor:'pointer',textDecoration:'underline',
+                                    background:'transparent',border:'none',fontFamily:'inherit',padding:0}}
+                                >
+                                  حذف
+                                </button>
+                              )}
+                            </div>
+                          ) : isEditor ? (
+                            <label style={{
+                              display:'inline-flex', alignItems:'center', gap:4,
+                              padding:'4px 8px', borderRadius:4,
+                              background:'var(--bg3)', border:'1px solid var(--border)',
+                              color:'var(--text2)', fontSize:11, cursor:'pointer',
+                              whiteSpace:'nowrap'
+                            }} title="رفع PDF إلى Cloudinary">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                              </svg>
+                              رفع PDF
+                              <input type="file" accept="application/pdf" style={{display:'none'}}
+                                onChange={async e => {
+                                  const file = e.target.files?.[0]
+                                  if (!file) return
+                                  setUploadingId(row.id)
+                                  const { url, error } = await uploadToCloudinary(file)
+                                  if (error) { alert('خطأ في الرفع: ' + error); setUploadingId(null); return }
+                                  await supabase.from('shop_drawings').update({ pdf_url: url }).eq('id', row.id)
+                                  setAllRows(prev => {
+                                    const next = prev.map(r => r.id===row.id ? {...r, pdf_url:url} : r)
+                                    setGroups(groupRows(next))
+                                    return next
+                                  })
+                                  setUploadingId(null)
+                                  e.target.value = ''
+                                }}/>
+                            </label>
+                          ) : (
+                            <span style={{color:'var(--text3)',fontSize:10}}>—</span>
+                          )}
+                        </td>
+
                       </tr>
                     )
                   })
@@ -677,6 +763,61 @@ export default function ShopDrawingsPage() {
         </div>
       </div>
 
+      {/* PDF Viewer Modal */}
+      {viewingPdf && (
+        <div style={{
+          position:'fixed', inset:0, background:'rgba(0,0,0,.85)',
+          zIndex:200, display:'flex', flexDirection:'column',
+        }}>
+          {/* Toolbar */}
+          <div style={{
+            height:48, background:'var(--bg2)', borderBottom:'1px solid var(--border)',
+            display:'flex', alignItems:'center', gap:12, padding:'0 16px', flexShrink:0
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            <span style={{fontSize:13, fontWeight:600, color:'var(--text)', flex:1}}>
+              {viewingPdf.name}
+            </span>
+            <a
+              href={viewingPdf.directUrl ?? viewingPdf.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display:'inline-flex', alignItems:'center', gap:6,
+                padding:'6px 12px', borderRadius:6,
+                background:'var(--accent)', color:'#fff',
+                fontSize:12, textDecoration:'none'
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              تنزيل
+            </a>
+            <button
+              onClick={() => setViewingPdf(null)}
+              style={{
+                background:'transparent', border:'1px solid var(--border)',
+                borderRadius:6, padding:'6px 12px',
+                color:'var(--text2)', cursor:'pointer', fontSize:12
+              }}
+            >
+              ✕ إغلاق
+            </button>
+          </div>
+          {/* PDF iframe */}
+          <iframe
+            src={viewingPdf.url}
+            style={{ flex:1, border:'none', width:'100%' }}
+            title="PDF Viewer"
+          />
+        </div>
+      )}
+
       {/* Add Modal */}
       {showAdd && (
         <AddRecordModal
@@ -684,6 +825,7 @@ export default function ShopDrawingsPage() {
           fields={FIELDS} onClose={() => setShowAdd(false)}
           onSaved={() => { fetchData(); fetchCounts() }}
           autoNumber={{ field:'no', getNext: getNextNo }}
+          onSaveAndGenerate={(record) => generateSHDForm(record)}
         />
       )}
 
@@ -829,13 +971,7 @@ export default function ShopDrawingsPage() {
             </div>
             <div style={{ background:'var(--bg3)', border:'1px solid #da363333',
               borderRadius:'var(--radius)', padding:16, marginBottom:20 }}>
-              <div 
-              style={{ 
-                fontFamily:'var(--mono)', 
-               
-                fontSize:12, 
-                color:'var(--blue)', 
-                marginBottom:4 }}>
+              <div style={{ fontFamily:'var(--mono)', fontSize:12, color:'var(--blue)', marginBottom:4 }}>
                 {confirmDel.request_no}
               </div>
               <div style={{ fontSize:13, marginBottom:8 }}>{confirmDel.description}</div>

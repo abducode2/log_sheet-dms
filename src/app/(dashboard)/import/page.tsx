@@ -28,8 +28,8 @@ const TABLE_LABELS: Record<string, string> = {
   requests_for_information:    'طلبات الاستيضاح RFI',
   non_conformance_reports:     'تقارير عدم المطابقة',
   document_transmittals:       'إرسال الوثائق',
-  letters_rawaf_naga:          'مراسلات الرواف ← نجا',
-  letters_naga_rawaf:          'مراسلات نجا ← الرواف',
+  letters_rawaf_naga:          'مراسلات المقاول ← الاستشاري',
+  letters_naga_rawaf:          'مراسلات الاستشاري ← المقاول',
 }
 
 // ── Column mapping per table ─────────────────────────────────────
@@ -339,8 +339,8 @@ export default function ImportPage() {
         { table:'requests_for_information',   name:'طلبات الاستيضاح' },
         { table:'non_conformance_reports',    name:'عدم المطابقة' },
         { table:'document_transmittals',      name:'إرسال الوثائق' },
-        { table:'letters_rawaf_naga',         name:'الرواف-نجا' },
-        { table:'letters_naga_rawaf',         name:'نجا-الرواف' },
+        { table:'letters_rawaf_naga',         name:'المقاول-الاستشاري' },
+        { table:'letters_naga_rawaf',         name:'الاستشاري-المقاول' },
       ]
 
       for (const sheet of EXPORT_SHEETS) {
@@ -636,7 +636,7 @@ export default function ImportPage() {
                 <polyline points="22 4 12 14.01 9 11.01"/>
               </svg>
               <div>
-                <div className={styles.doneTitle}>اكتمل الاستيراد بنجاح!</div>
+                <div className={styles.doneTitle}>اكتمل الاستيراد بالاستشاريح!</div>
                 <div className={styles.doneSub}>
                   {Object.values(results).reduce((s,r)=>s+r.success,0)} سجل تم استيراده
                 </div>

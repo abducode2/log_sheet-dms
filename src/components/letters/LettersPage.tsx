@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import Topbar from '@/components/layout/Topbar'
 import { useRole } from '@/lib/hooks/useRole'
 import styles from '@/app/(dashboard)/shop-drawings/page.module.css'
+import { uploadToCloudinary, getCloudinaryViewerUrl } from '@/lib/utils/cloudinary'
 
 interface Row {
   id: string
@@ -13,6 +14,7 @@ interface Row {
   subject: string
   date: string | null
   remarks: string | null
+  pdf_url: string | null
 }
 
 interface Props {
@@ -56,6 +58,8 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
   // Delete
   const [confirmDel, setConfirmDel] = useState<Row|null>(null)
   const [deleting,   setDeleting]   = useState(false)
+  const [uploadingId, setUploadingId] = useState<string|null>(null)
+  const [viewingPdf, setViewingPdf]   = useState<{url:string;name:string;directUrl?:string}|null>(null)
 
   const fetchData = useCallback(async () => {
     setLoading(true)
@@ -145,13 +149,7 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
         title={title}
         sub={`HARAJ-IQC-ALRAWAF · إجمالي ${total} خطاب`}
         actions={<>
-          {/* <button className="btn btn-ghost btn-sm" onClick={exportExcel}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            تصدير Excel
-          </button> */}
+         
           {isEditor && (
             <button className="btn btn-primary btn-sm" onClick={openAdd}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -229,6 +227,7 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
                     </th>
                   ))}
                   <th style={{width:110}}>إجراء</th>
+                  <th style={{width:90}}>PDF</th>
                 </tr>
               </thead>
               <tbody>
@@ -310,6 +309,91 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
                         )
                       )}
                     </td>
+
+                    {/* PDF Cell */}
+                    <td style={{textAlign:'center', padding:'6px 8px'}}>
+                      {uploadingId === row.id ? (
+                        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
+                          <div className="spinner" style={{width:16,height:16}}/>
+                          <span style={{fontSize:9,color:'var(--text3)'}}>جارٍ الرفع...</span>
+                        </div>
+                      ) : row.pdf_url ? (
+                        <div style={{display:'flex',flexDirection:'column',gap:3,alignItems:'center'}}>
+                          <button
+                            onClick={() => setViewingPdf({
+                              url: getCloudinaryViewerUrl(row.pdf_url!),
+                              name: row.letter_no,
+                              directUrl: row.pdf_url!
+                            })}
+                            style={{
+                              display:'inline-flex', alignItems:'center', gap:4,
+                              padding:'4px 8px', borderRadius:4,
+                              background:'#da363318', border:'1px solid #da363344',
+                              color:'var(--red)', fontSize:11, cursor:'pointer',
+                              fontFamily:'inherit', whiteSpace:'nowrap'
+                            }}
+                          >
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                              <polyline points="14 2 14 8 20 8"/>
+                            </svg>
+                            عرض
+                          </button>
+                          {(isEditor || isAdmin) && (
+                            <button
+                              onClick={async () => {
+                                if (!confirm('هل أنت متأكد من حذف ملف PDF؟')) return
+                                await fetch('/api/cloudinary-delete', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ url: row.pdf_url }),
+                                })
+                                const { error } = await supabase
+                                  .from(table)
+                                  .update({ pdf_url: null })
+                                  .eq('id', row.id)
+                                if (error) { alert('خطأ في الحذف: ' + error.message); return }
+                                setData(prev => prev.map(r => r.id===row.id ? {...r, pdf_url:null} : r))
+                              }}
+                              style={{fontSize:9,color:'var(--red)',cursor:'pointer',textDecoration:'underline',
+                                background:'transparent',border:'none',fontFamily:'inherit',padding:0}}
+                            >
+                              حذف
+                            </button>
+                          )}
+                        </div>
+                      ) : (isEditor || isAdmin) ? (
+                        <label style={{
+                          display:'inline-flex', alignItems:'center', gap:4,
+                          padding:'4px 8px', borderRadius:4,
+                          background:'var(--bg3)', border:'1px solid var(--border)',
+                          color:'var(--text2)', fontSize:11, cursor:'pointer',
+                          whiteSpace:'nowrap'
+                        }} title="رفع PDF إلى Cloudinary">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                          </svg>
+                          رفع PDF
+                          <input type="file" accept="application/pdf" style={{display:'none'}}
+                            onChange={async e => {
+                              const file = e.target.files?.[0]
+                              if (!file) return
+                              setUploadingId(row.id)
+                              const { url, error } = await uploadToCloudinary(file, `p179/letters/${table}`)
+                              if (error) { alert('خطأ في الرفع: ' + error); setUploadingId(null); return }
+                              await supabase.from(table).update({ pdf_url: url }).eq('id', row.id)
+                              setData(prev => prev.map(r => r.id===row.id ? {...r, pdf_url:url} : r))
+                              setUploadingId(null)
+                              e.target.value = ''
+                            }}/>
+                        </label>
+                      ) : (
+                        <span style={{color:'var(--text3)',fontSize:10}}>—</span>
+                      )}
+                    </td>
+
                   </tr>
                 ))}
               </tbody>
@@ -327,6 +411,32 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
           </div>
         </div>
       </div>
+
+      {/* PDF Viewer Modal */}
+      {viewingPdf && (
+        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,.85)',zIndex:200,display:'flex',flexDirection:'column'}}>
+          <div style={{height:48,background:'var(--bg2)',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:12,padding:'0 16px',flexShrink:0}}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            <span style={{fontSize:13,fontWeight:600,color:'var(--text)',flex:1}}>{viewingPdf.name}</span>
+            <a href={viewingPdf.directUrl??viewingPdf.url} target="_blank" rel="noopener noreferrer"
+              style={{display:'inline-flex',alignItems:'center',gap:6,padding:'6px 12px',borderRadius:6,background:'var(--accent)',color:'#fff',fontSize:12,textDecoration:'none'}}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              تنزيل
+            </a>
+            <button onClick={() => setViewingPdf(null)}
+              style={{background:'transparent',border:'1px solid var(--border)',borderRadius:6,padding:'6px 12px',color:'var(--text2)',cursor:'pointer',fontSize:12}}>
+              ✕ إغلاق
+            </button>
+          </div>
+          <iframe src={viewingPdf.url} style={{flex:1,border:'none',width:'100%'}} title="PDF Viewer"/>
+        </div>
+      )}
 
       {/* Add Modal */}
       {showAdd && (

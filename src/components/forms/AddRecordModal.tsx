@@ -1,4 +1,3 @@
-
 'use client'
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
@@ -9,6 +8,7 @@ export interface FieldDef {
   type: 'text' | 'date' | 'number' | 'select' | 'textarea'
   options?: string[]
   required?: boolean
+  defaultValue?: string
   prefixStatic?: string
   prefixDynamic?: { fromField: string; map: Record<string, string> }
 }
@@ -21,17 +21,23 @@ interface Props {
   onSaved: () => void
   autoNumber?: { field: string; getNext: () => Promise<number> }
   fixedValues?: Record<string, string>
+  onSaveAndGenerate?: (record: Record<string, unknown>) => void
 }
 
-export default function AddRecordModal({ table, title, fields, onClose, onSaved, autoNumber, fixedValues }: Props) {
+export default function AddRecordModal({ table, title, fields, onClose, onSaved, autoNumber, fixedValues, onSaveAndGenerate }: Props) {
   const supabase = createClient()
   const [values, setValues] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // Auto-fill: fixed values + static prefixes + defaults
   useEffect(() => {
     const init: Record<string, string> = {}
     if (fixedValues) Object.assign(init, fixedValues)
+    for (const f of fields) {
+      if (f.defaultValue && !init[f.key]) init[f.key] = f.defaultValue
+      if (f.prefixStatic && !init[f.key]) init[f.key] = f.prefixStatic
+    }
     setValues(prev => ({ ...prev, ...init }))
   }, [])
 
@@ -42,22 +48,21 @@ export default function AddRecordModal({ table, title, fields, onClose, onSaved,
     })
   }, [autoNumber])
 
-  function getPrefix(f: FieldDef): string {
-    if (f.prefixStatic) return f.prefixStatic
-    if (f.prefixDynamic) {
-      const sourceVal = values[f.prefixDynamic.fromField] ?? ''
-      return f.prefixDynamic.map[sourceVal] ?? ''
-    }
-    return ''
-  }
-
-  function fieldHasPrefix(f: FieldDef): boolean {
-    return !!(f.prefixStatic || f.prefixDynamic)
-  }
-
+  // Auto-calculate V.Time + auto-prefix
   function set(key: string, val: string) {
     setValues(prev => {
       const next = { ...prev, [key]: val }
+      // Auto-prefix: when element changes, update request_no prefix
+      for (const f of fields) {
+        if (f.prefixDynamic && f.prefixDynamic.fromField === key) {
+          const prefix    = f.prefixDynamic.map[val] ?? ''
+          const current   = next[f.key] ?? ''
+          const oldPrefix = f.prefixDynamic.map[prev[key] ?? ''] ?? ''
+          if (!current || current === oldPrefix || current.startsWith(oldPrefix)) {
+            next[f.key] = prefix
+          }
+        }
+      }
       const sub = key === 'submission_date' ? val : next['submission_date']
       const app = key === 'approval_date'   ? val : next['approval_date']
       const prd = key === 'pour_date'       ? val : next['pour_date']
@@ -76,10 +81,36 @@ export default function AddRecordModal({ table, title, fields, onClose, onSaved,
     return !!(fixedValues && key in fixedValues)
   }
 
+  async function handleSaveAndGenerate() {
+    // Build record same as handleSave but also call onSaveAndGenerate
+    const record: Record<string, unknown> = {}
+    if (fixedValues) Object.assign(record, fixedValues)
+    for (const f of fields) {
+      if (fixedValues && f.key in fixedValues) continue
+      const v = values[f.key] ?? ''
+      if (!v && f.required) { setError(`حقل "${f.label}" مطلوب`); return }
+      if (v === '') continue
+      if (f.type === 'number') record[f.key] = Number(v)
+      else record[f.key] = v
+    }
+    if (autoNumber && values[autoNumber.field]) {
+      record[autoNumber.field] = Number(values[autoNumber.field])
+    }
+    setLoading(true); setError('')
+    const { error } = await supabase.from(table).insert(record)
+    if (error) { setError(error.message); setLoading(false) }
+    else {
+      onSaved()
+      onSaveAndGenerate?.(record)
+      onClose()
+    }
+  }
+
   async function handleSave() {
     setLoading(true); setError('')
     const record: Record<string, unknown> = {}
 
+    // Include fixed values first
     if (fixedValues) {
       for (const [k, v] of Object.entries(fixedValues)) {
         record[k] = v
@@ -87,29 +118,7 @@ export default function AddRecordModal({ table, title, fields, onClose, onSaved,
     }
 
     for (const f of fields) {
-      if (isFixed(f.key)) continue
-
-      if (fieldHasPrefix(f)) {
-        const prefix = getPrefix(f)
-        const suffix = values[f.key] ?? ''
-
-        if (f.required) {
-          if (!prefix && f.prefixDynamic) {
-            const depLabel = fields.find(x => x.key === f.prefixDynamic!.fromField)?.label ?? 'العنصر'
-            setError(`اختر "${depLabel}" أولاً`)
-            setLoading(false); return
-          }
-          if (!suffix) {
-            setError(`حقل "${f.label}" مطلوب`)
-            setLoading(false); return
-          }
-        }
-
-        const full = prefix + suffix
-        if (full) record[f.key] = full
-        continue
-      }
-
+      if (isFixed(f.key)) continue  // already included
       const v = values[f.key] ?? ''
       if (!v && f.required) { setError(`حقل "${f.label}" مطلوب`); setLoading(false); return }
       if (v === '') continue
@@ -127,141 +136,80 @@ export default function AddRecordModal({ table, title, fields, onClose, onSaved,
   }
 
   return (
-    <div className="modal-overlay" 
-    onClick={e => e.target === e.currentTarget && onClose()}>
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
       <div className="modal">
         <div className="modal-header">
           <div className="modal-title">{title}</div>
           <button className="btn btn-ghost btn-sm" onClick={onClose}>✕</button>
         </div>
 
-        <div 
-        style={{ display:'grid', 
-        gridTemplateColumns:'1fr 1fr', 
-        gap:'0 16px' }}>
-          {fields.map(f => {
-            const fixed = isFixed(f.key)
-            const withPrefix = fieldHasPrefix(f)
-            const prefix = withPrefix ? getPrefix(f) : ''
-
-            return (
-              <div
-                key={f.key}
-                className="form-group"
-                style={f.type === 'textarea' ? { gridColumn:'1/-1' } : {}}
-              >
-                <label className="form-label">
-                  {f.label}
-                  {f.required && <span style={{ color:'var(--red)' }}> *</span>}
-                  {autoNumber?.field === f.key && (
-                    <span style={{ 
-                      color:'var(--green)', 
-                      fontSize:10, 
-                      marginRight:6 }}>● تلقائي</span>
-                  )}
-                  {f.key === 'v_time' && (
-                    <span style={{ 
-                      color:'var(--blue)', 
-                      fontSize:10, 
-                      marginRight:6 }}>● يُحسب تلقائياً</span>
-                  )}
-                  {fixed && (
-                    <span style={{ 
-                      color:'var(--amber)', 
-                      fontSize:10, 
-                      marginRight:6 }}>● ثابت</span>
-                  )}
-                </label>
-
-                {f.type === 'select' ? (
-                  <select
-                    className="form-select"
-                    value={fixed ? (fixedValues![f.key]) : (values[f.key] ?? '')}
-                    onChange={e => !fixed && set(f.key, e.target.value)}
-                    disabled={fixed}
-                    style={fixed ? { opacity:.6, cursor:'default' } : {}}
-                  >
-                    <option value="">-- اختر --</option>
-                    {f.options?.map(o => <option key={o} value={o}>{o}</option>)}
-                  </select>
-                ) : f.type === 'textarea' ? (
-                  <textarea
-                    className="form-input"
-                    rows={3}
-                    value={values[f.key] ?? ''}
-                    onChange={e => set(f.key, e.target.value)}
-                    style={{ resize:'vertical' }}
-                  />
-                ) : withPrefix ? (
-                  <div style={{ display:'flex',
-                    // backgroundColor:"red", 
-                  alignItems:'stretch'
-                   }}>
-                    {/* <span style={{
-                      display:'flex', alignItems:'center',
-                      background:'var(--bg3)',
-                      border:'1px solid var(--border)', 
-                      borderRight:'none',
-                      borderRadius:'0 var(--radius)  var(--radius) 0',
-                      padding:'0 10px', fontSize:11, 
-                      fontFamily:'var(--mono)',
-                      color: prefix ? 'var(--blue)' : 'var(--text3)',
-                      whiteSpace:'nowrap', 
-                      userSelect:'none',
-                    }}>
-                      {prefix || (f.prefixDynamic ? '— اختر العنصر أولاً —' : '')}
-                    </span> */}
-                    <input
-                      className="form-input"
-                      type="text"
-                      style={{ 
-                         borderRadius:'0 var(--radius)  var(--radius) 0',
-                        flex:1, minWidth:0 }}
-                      placeholder="001"
-                      value={values[f.key] ?? ''}
-                      onChange={e => set(f.key, e.target.value)}
-                    />
-                     <span style={{
-                      display:'flex', 
-                      direction:"ltr",
-                      alignItems:'center',
-                      background:'var(--bg3)',
-                      border:'1px solid var(--border)', 
-                      borderRight:'none',
-                      borderRadius:'var(--radius) 0 0 var(--radius)', 
-                     
-                      padding:'0 10px', 
-                      fontSize:11, 
-                      fontFamily:'var(--mono)',
-                      color: prefix ? 'var(--blue)' : 'var(--text3)',
-                      whiteSpace:'nowrap', 
-                      userSelect:'none',
-                    }}>
-                      {prefix || (f.prefixDynamic ? '— اختر العنصر أولاً —' : '')}
-                    </span>
-                  </div>
-                ) : (
-                  <input
-                    className="form-input"
-                    type={f.type === 'date' ? 'date' : f.type === 'number' ? 'number' : 'text'}
-                    value={fixed ? fixedValues![f.key] : (values[f.key] ?? '')}
-                    onChange={e => !fixed && set(f.key, e.target.value)}
-                    readOnly={autoNumber?.field === f.key || f.key === 'v_time' || fixed}
-                    style={(autoNumber?.field === f.key || f.key === 'v_time' || fixed)
-                      ? { opacity:.6, cursor:'default' } : {}}
-                  />
+        <div style={{ 
+          display:'grid', 
+          gridTemplateColumns:'1fr 1fr', 
+          gap:'0 16px' }}>
+          {fields.map(f => (
+            <div
+              key={f.key}
+              className="form-group"
+              style={f.type === 'textarea' ? { gridColumn:'1/-1' } : {}}
+            >
+              <label className="form-label">
+                {f.label}
+                {f.required && <span style={{ color:'var(--red)' }}> *</span>}
+                {autoNumber?.field === f.key && (
+                  <span style={{ color:'var(--green)', fontSize:10, marginRight:6 }}>● تلقائي</span>
                 )}
-              </div>
-            )
-          })}
+                {f.key === 'v_time' && (
+                  <span style={{ color:'var(--blue)', fontSize:10, marginRight:6 }}>● يُحسب تلقائياً</span>
+                )}
+                {isFixed(f.key) && (
+                  <span style={{ color:'var(--amber)', fontSize:10, marginRight:6 }}>● ثابت</span>
+                )}
+              </label>
+
+              {f.type === 'select' ? (
+                <select
+                  className="form-select"
+                  value={isFixed(f.key) ? (fixedValues![f.key]) : (values[f.key] ?? '')}
+                  onChange={e => !isFixed(f.key) && set(f.key, e.target.value)}
+                  disabled={isFixed(f.key)}
+                  style={isFixed(f.key) ? { opacity:.6, cursor:'default' } : {}}
+                >
+                  <option value="">-- اختر --</option>
+                  {f.options?.map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              ) : f.type === 'textarea' ? (
+                <textarea
+                  className="form-input"
+                  rows={3}
+                  value={values[f.key] ?? ''}
+                  onChange={e => set(f.key, e.target.value)}
+                  style={{ resize:'vertical' }}
+                />
+              ) : (
+                <input
+                  className="form-input"
+                  type={f.type === 'date' ? 'date' : f.type === 'number' ? 'number' : 'text'}
+                  value={isFixed(f.key) ? fixedValues![f.key] : (values[f.key] ?? '')}
+                  onChange={e => !isFixed(f.key) && set(f.key, e.target.value)}
+                  readOnly={autoNumber?.field === f.key || f.key === 'v_time' || isFixed(f.key)}
+                  style={(autoNumber?.field === f.key || f.key === 'v_time' || isFixed(f.key))
+                    ? { opacity:.6, cursor:'default' } : {}}
+                  placeholder={
+                    f.prefixDynamic ? (f.prefixDynamic.map[values[f.prefixDynamic.fromField] ?? ''] ?? '') :
+                    f.prefixStatic  ? f.prefixStatic :
+                    undefined}
+                />
+              )}
+            </div>
+          ))}
         </div>
 
         {error && (
           <div style={{
             fontSize:12, color:'var(--red)',
             background:'#da363318', border:'1px solid #da363344',
-            borderRadius:'0', 
-            padding:'8px 12px', marginBottom:12
+            borderRadius:'var(--radius-sm)', padding:'8px 12px', marginBottom:12
           }}>
             {error}
           </div>
@@ -269,6 +217,20 @@ export default function AddRecordModal({ table, title, fields, onClose, onSaved,
 
         <div style={{ display:'flex', gap:10, justifyContent:'flex-end', marginTop:8 }}>
           <button className="btn btn-ghost" onClick={onClose}>إلغاء</button>
+          {onSaveAndGenerate && (
+            <button className="btn btn-ghost" onClick={() => handleSaveAndGenerate()} disabled={loading}
+              style={{ borderColor:'var(--green)', color:'var(--green)' }}>
+              {loading ? <span className="spinner"/> : <>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                  <line x1="12" y1="18" x2="12" y2="12"/>
+                  <line x1="9" y1="15" x2="15" y2="15"/>
+                </svg>
+                حفظ وإنشاء النموذج
+              </>}
+            </button>
+          )}
           <button className="btn btn-primary" onClick={handleSave} disabled={loading}>
             {loading ? <span className="spinner"/> : 'حفظ السجل'}
           </button>

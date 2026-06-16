@@ -6,6 +6,8 @@ import { useRole } from '@/lib/hooks/useRole'
 import AddRecordModal from '@/components/forms/AddRecordModal'
 import type { FieldDef } from '@/components/forms/AddRecordModal'
 import styles from '@/app/(dashboard)/shop-drawings/page.module.css'
+import { generateForm } from '@/lib/utils/generateForm'
+import { uploadToCloudinary, getCloudinaryViewerUrl } from '@/lib/utils/cloudinary'
 
 // ── Helpers ──────────────────────────────────────────────────────
 function calcVtime(sub: string | null, app: string | null): number | null {
@@ -42,14 +44,24 @@ const EL_COLOR: Record<string,string> = {
   ARC:'el-ar', CIV:'el-sc', SUR:'el-su', MEC:'el-me', ELE:'el-el', GEN:'el-gen'
 }
 
+const RFI_PREFIX: Record<string,string> = {
+  ARC:'J500-RWF-RFI-ARC-',
+  CIV:'J500-RWF-RFI-CIV-',
+  SUR:'J500-RWF-RFI-SUR-',
+  MEC:'J500-RWF-RFI-MEC-',
+  ELE:'J500-RWF-RFI-ELE-',
+  GEN:'J500-RWF-RFI-GEN-',
+}
+
 const FIELDS: FieldDef[] = [
-  { key:'rfi_no',          label:'رقم RFI',          type:'text',   required:true },
-  { key:'subject',         label:'الموضوع',           type:'text',   required:true },
-  { key:'element',         label:'العنصر',            type:'select', required:true, 
+  { key:'element',         label:'العنصر',            type:'select', required:true,
     options:['ARC','CIV','SUR','MEC','ELE','GEN'] },
+  { key:'rfi_no',          label:'رقم RFI',           type:'text',   required:true,
+    prefixDynamic:{ fromField:'element', map:RFI_PREFIX } },
+  { key:'subject',         label:'الموضوع',           type:'text',   required:true },
+  { key:'submission_date', label:'تاريخ التقديم',     type:'date',   required:true },
   { key:'rev',             label:'رقم المراجعة',      type:'number' },
-  { key:'submission_date', label:'تاريخ التقديم',     type:'date' },
-  { key:'ac_co',           label:'حالة الاعتماد',     type:'select', 
+  { key:'ac_co',           label:'حالة الاعتماد',     type:'select', defaultValue:'P',
     options:['A','B','C','D','P'] },
   { key:'approval_date',   label:'تاريخ الاعتماد',    type:'date' },
   { key:'v_time',          label:'V.Time (أيام)',     type:'number' },
@@ -78,6 +90,7 @@ approval_date: string | null
   v_time: number | null
   request_no?: string
   description?: string
+  pdf_url: string | null
 }
 
 // Group rows: each group = root row + all its revisions
@@ -151,6 +164,9 @@ export default function RfiPage() {
   const [deleting, setDeleting]           = useState(false)
   const [deleteBlockRow, setDeleteBlockRow] = useState<Row|null>(null)
   const [deleteBlockRevs, setDeleteBlockRevs] = useState<Row[]>([])
+
+  const [uploadingId, setUploadingId] = useState<string|null>(null)
+  const [viewingPdf, setViewingPdf]   = useState<{url:string;name:string;directUrl?:string}|null>(null)
 
   // Fetch counts (only root/non-archived for tab counts)
   const fetchCounts = useCallback(async () => {
@@ -398,13 +414,7 @@ export default function RfiPage() {
         title="طلبات الاستيضاح — Request for Information"
         sub={`HARAJ-IQC-ALRAWAF · إجمالي ${counts.ALL ?? 0} طلب`}
         actions={<>
-          {/* <button className="btn btn-ghost btn-sm" onClick={exportExcel}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            تصدير Excel
-          </button> */}
+          
           {isEditor && (
             <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -522,6 +532,7 @@ export default function RfiPage() {
                   <th>تاريخ الاعتماد</th>
                   <th style={{width:70}}>V.Time</th>
                   <th style={{width:120}}>إجراء</th>
+                  <th style={{width:90}}>PDF</th>
                 </tr>
               </thead>
               <tbody>
@@ -664,6 +675,98 @@ export default function RfiPage() {
                             </div>
                           )}
                         </td>
+
+                        {/* PDF Cell */}
+                        <td style={{textAlign:'center', padding:'6px 8px'}}>
+                          {uploadingId === row.id ? (
+                            <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
+                              <div className="spinner" style={{width:16,height:16}}/>
+                              <span style={{fontSize:9,color:'var(--text3)'}}>جارٍ الرفع...</span>
+                            </div>
+                          ) : row.pdf_url ? (
+                            <div style={{display:'flex',flexDirection:'column',gap:3,alignItems:'center'}}>
+                              <button
+                                onClick={() => setViewingPdf({
+                                  url: getCloudinaryViewerUrl(row.pdf_url!),
+                                  name: row.rfi_no ?? String(row.no),
+                                  directUrl: row.pdf_url!
+                                })}
+                                style={{
+                                  display:'inline-flex', alignItems:'center', gap:4,
+                                  padding:'4px 8px', borderRadius:4,
+                                  background:'#da363318', border:'1px solid #da363344',
+                                  color:'var(--red)', fontSize:11, cursor:'pointer',
+                                  fontFamily:'inherit', whiteSpace:'nowrap'
+                                }}
+                              >
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                  <polyline points="14 2 14 8 20 8"/>
+                                </svg>
+                                عرض
+                              </button>
+                              {(isEditor || isAdmin) && (
+                                <button
+                                  onClick={async () => {
+                                    if (!confirm('هل أنت متأكد من حذف ملف PDF؟')) return
+                                    await fetch('/api/cloudinary-delete', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify({ url: row.pdf_url }),
+                                    })
+                                    const { error } = await supabase
+                                      .from('requests_for_information')
+                                      .update({ pdf_url: null })
+                                      .eq('id', row.id)
+                                    if (error) { alert('خطأ في الحذف: ' + error.message); return }
+                                    setAllRows(prev => {
+                                      const next = prev.map(r => r.id===row.id ? {...r, pdf_url:null} : r)
+                                      setGroups(groupRows(next))
+                                      return next
+                                    })
+                                  }}
+                                  style={{fontSize:9,color:'var(--red)',cursor:'pointer',textDecoration:'underline',
+                                    background:'transparent',border:'none',fontFamily:'inherit',padding:0}}
+                                >
+                                  حذف
+                                </button>
+                              )}
+                            </div>
+                          ) : (isEditor || isAdmin) ? (
+                            <label style={{
+                              display:'inline-flex', alignItems:'center', gap:4,
+                              padding:'4px 8px', borderRadius:4,
+                              background:'var(--bg3)', border:'1px solid var(--border)',
+                              color:'var(--text2)', fontSize:11, cursor:'pointer',
+                              whiteSpace:'nowrap'
+                            }} title="رفع PDF إلى Cloudinary">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                <polyline points="17 8 12 3 7 8"/>
+                                <line x1="12" y1="3" x2="12" y2="15"/>
+                              </svg>
+                              رفع PDF
+                              <input type="file" accept="application/pdf" style={{display:'none'}}
+                                onChange={async e => {
+                                  const file = e.target.files?.[0]
+                                  if (!file) return
+                                  setUploadingId(row.id)
+                                  const { url, error } = await uploadToCloudinary(file, 'p179/rfi')
+                                  if (error) { alert('خطأ في الرفع: ' + error); setUploadingId(null); return }
+                                  await supabase.from('requests_for_information').update({ pdf_url: url }).eq('id', row.id)
+                                  setAllRows(prev => {
+                                    const next = prev.map(r => r.id===row.id ? {...r, pdf_url:url} : r)
+                                    setGroups(groupRows(next))
+                                    return next
+                                  })
+                                  setUploadingId(null)
+                                  e.target.value = ''
+                                }}/>
+                            </label>
+                          ) : (
+                            <span style={{color:'var(--text3)',fontSize:10}}>—</span>
+                          )}
+                        </td>
                       </tr>
                     )
                   })
@@ -674,6 +777,59 @@ export default function RfiPage() {
         </div>
       </div>
 
+      {/* PDF Viewer Modal */}
+      {viewingPdf && (
+        <div style={{
+          position:'fixed', inset:0, background:'rgba(0,0,0,.85)',
+          zIndex:200, display:'flex', flexDirection:'column',
+        }}>
+          <div style={{
+            height:48, background:'var(--bg2)', borderBottom:'1px solid var(--border)',
+            display:'flex', alignItems:'center', gap:12, padding:'0 16px', flexShrink:0
+          }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--red)" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            <span style={{fontSize:13, fontWeight:600, color:'var(--text)', flex:1}}>
+              {viewingPdf.name}
+            </span>
+            <a
+              href={viewingPdf.directUrl ?? viewingPdf.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                display:'inline-flex', alignItems:'center', gap:6,
+                padding:'6px 12px', borderRadius:6,
+                background:'var(--accent)', color:'#fff',
+                fontSize:12, textDecoration:'none'
+              }}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              تنزيل
+            </a>
+            <button
+              onClick={() => setViewingPdf(null)}
+              style={{
+                background:'transparent', border:'1px solid var(--border)',
+                borderRadius:6, padding:'6px 12px',
+                color:'var(--text2)', cursor:'pointer', fontSize:12
+              }}
+            >
+              ✕ إغلاق
+            </button>
+          </div>
+          <iframe
+            src={viewingPdf.url}
+            style={{ flex:1, border:'none', width:'100%' }}
+            title="PDF Viewer"
+          />
+        </div>
+      )}
+
       {/* Add Modal */}
       {showAdd && (
         <AddRecordModal
@@ -681,6 +837,7 @@ export default function RfiPage() {
           fields={FIELDS} onClose={() => setShowAdd(false)}
           onSaved={() => { fetchData(); fetchCounts() }}
           autoNumber={{ field:'no', getNext: getNextNo }}
+          onSaveAndGenerate={record => generateForm({ docType:'RFI', titleAr:'طلب استيضاح', fields:FIELDS, record })}
         />
       )}
 
