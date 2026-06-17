@@ -2,6 +2,7 @@
 'use client'
 import { usePathname, useRouter } from 'next/navigation'
 import { useRole } from '@/lib/hooks/useRole'
+import { useTheme, type Theme } from '@/lib/hooks/useTheme'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
@@ -50,12 +51,19 @@ const TABLES = [
   'pouring_log',
 ]
 
+const THEMES: { id: Theme; label: string; colors: [string, string, string] }[] = [
+  { id: 'dark',     label: 'داكن',           colors: ['#0d1117', '#161b22', '#58a6ff'] },
+  { id: 'light',    label: 'فاتح',           colors: ['#f6f8fa', '#ffffff', '#0969da'] },
+  { id: 'midnight', label: 'منتصف الليل',    colors: ['#010409', '#0d1117', '#4facf7'] },
+]
+
 export default function Sidebar({ userEmail }: { userEmail: string }) {
   const pathname = usePathname()
   const router   = useRouter()
   const supabase = createClient()
   const [counts, setCounts] = useState<Record<string, number>>({})
   const { isAdmin } = useRole()
+  const { theme, changeTheme } = useTheme()
 
   useEffect(() => {
     async function fetchCounts() {
@@ -121,6 +129,46 @@ export default function Sidebar({ userEmail }: { userEmail: string }) {
       ))}
 
       <div className="sidebar-footer">
+
+        {/* Theme switcher */}
+        <div style={{ marginBottom: 10 }}>
+          <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 6, padding: '0 2px', textTransform: 'uppercase', letterSpacing: '.06em' }}>
+            الثيم
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {THEMES.map(t => (
+              <button
+                key={t.id}
+                title={t.label}
+                onClick={() => changeTheme(t.id)}
+                style={{
+                  flex: 1,
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  padding: '6px 4px', borderRadius: 'var(--radius)',
+                  border: theme === t.id ? '2px solid var(--accent)' : '2px solid var(--border)',
+                  background: theme === t.id ? 'var(--accent)11' : 'transparent',
+                  cursor: 'pointer', transition: 'all .15s',
+                }}
+              >
+                {/* Mini preview */}
+                <div style={{
+                  width: 32, height: 22, borderRadius: 4, overflow: 'hidden',
+                  display: 'grid', gridTemplateColumns: '40% 60%',
+                  border: '1px solid var(--border)',
+                }}>
+                  <div style={{ background: t.colors[0] }}/>
+                  <div style={{ background: t.colors[1], display: 'flex', alignItems: 'flex-end', padding: 2 }}>
+                    <div style={{ width: '100%', height: 3, borderRadius: 2, background: t.colors[2] }}/>
+                  </div>
+                </div>
+                <span style={{ fontSize: 9, color: theme === t.id ? 'var(--accent)' : 'var(--text3)', fontWeight: theme === t.id ? 600 : 400 }}>
+                  {t.label}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div style={{ fontSize:10, color:'var(--text3)', marginBottom:8, padding:'0 2px' }}>
           {userEmail}
         </div>

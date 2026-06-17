@@ -191,6 +191,148 @@ export default function ReportsPage() {
     XLSX.writeFile(wb, `تقرير_${from}_${to}.xlsx`)
   }
 
+  function exportPDF() {
+    const activeSecs = SECTIONS.filter(s => (results[s.table]?.count ?? 0) > 0)
+    const generated  = new Date().toLocaleDateString('ar-SA', { year:'numeric', month:'long', day:'numeric' })
+
+    const summaryRows = SECTIONS.map(s => {
+      const count = results[s.table]?.count ?? 0
+      return `<tr>
+        <td>${s.label}</td>
+        <td style="text-align:center;font-weight:700;color:${count > 0 ? '#1f6feb' : '#666'}">${count}</td>
+      </tr>`
+    }).join('')
+
+    const detailSections = activeSecs.map(sec => {
+      const rows = results[sec.table]?.rows ?? []
+      const headerCells = ['#', ...sec.keyCols.map(c => c.label)].map(h => `<th>${h}</th>`).join('')
+      const bodyRows = rows.map((row, i) => {
+        const cells = [`<td style="text-align:center;color:#666;font-size:11px">${String(row.no ?? i + 1)}</td>`]
+        for (const col of sec.keyCols) {
+          const raw = row[col.key]
+          const val = raw != null ? String(raw) : '—'
+          if (col.type === 'code') {
+            cells.push(`<td><span style="font-family:monospace;color:#1f6feb;font-size:11px">${val}</span></td>`)
+          } else if (col.type === 'status' && val !== '—') {
+            const s = stBadge(val)
+            cells.push(`<td><span style="display:inline-block;padding:2px 8px;border-radius:3px;background:${s.bg};color:${s.color};font-size:10px;font-weight:700">${val}</span></td>`)
+          } else {
+            cells.push(`<td style="font-size:11px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${val}">${val}</td>`)
+          }
+        }
+        return `<tr>${cells.join('')}</tr>`
+      }).join('')
+      return `
+        <div class="section-block">
+          <div class="section-title">
+            <span class="dot" style="background:${sec.dot}"></span>
+            ${sec.label}
+            <span class="badge">${sec.count ?? rows.length} سجل</span>
+          </div>
+          <table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>
+        </div>`
+    }).join('')
+
+    const html = `<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>التقرير الدوري — ${from} إلى ${to}</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0 }
+  body {
+    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+    font-size: 12px; color: #1a1a2e;
+    direction: rtl; background: #fff; padding: 24px 32px;
+  }
+  .header { border-bottom: 3px solid #1f6feb; padding-bottom: 14px; margin-bottom: 20px }
+  .header-top { display: flex; justify-content: space-between; align-items: flex-start }
+  .project-name { font-size: 20px; font-weight: 800; color: #1f6feb }
+  .project-sub  { font-size: 11px; color: #555; margin-top: 2px }
+  .report-title { font-size: 15px; font-weight: 700; color: #111; text-align: left }
+  .report-meta  { font-size: 10px; color: #666; text-align: left; margin-top: 3px }
+  .period-bar {
+    display: flex; gap: 24px; margin-top: 12px;
+    background: #f0f4ff; border-radius: 6px; padding: 8px 14px;
+    font-size: 11px; color: #333;
+  }
+  .period-item strong { color: #1f6feb }
+  /* Summary table */
+  .summary-title { font-size: 13px; font-weight: 700; color: #111; margin-bottom: 8px; margin-top: 4px }
+  .summary-table { width: 100%; border-collapse: collapse; margin-bottom: 24px }
+  .summary-table th { background: #1f6feb; color: #fff; padding: 7px 12px; font-size: 11px; font-weight: 600 }
+  .summary-table td { padding: 6px 12px; border-bottom: 1px solid #e8eaf0; font-size: 11px }
+  .summary-table tr:nth-child(even) td { background: #f8f9ff }
+  /* Section blocks */
+  .section-block { margin-bottom: 20px; page-break-inside: avoid }
+  .section-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 700; color: #111;
+    background: #f4f6fb; padding: 7px 12px;
+    border-right: 4px solid #1f6feb; margin-bottom: 0;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0 }
+  .badge {
+    margin-right: auto; background: #e8f0fe; color: #1f6feb;
+    border-radius: 12px; padding: 1px 10px; font-size: 10px; font-weight: 700;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 11px }
+  th { background: #e8edf5; color: #333; padding: 6px 10px; font-weight: 600; border: 1px solid #d0d7e3 }
+  td { padding: 5px 10px; border: 1px solid #e0e5ef; vertical-align: middle }
+  tr:nth-child(even) td { background: #f9fafc }
+  .footer {
+    margin-top: 28px; border-top: 1px solid #ddd; padding-top: 10px;
+    font-size: 10px; color: #888; text-align: center;
+  }
+  @media print {
+    body { padding: 12px 20px }
+    .section-block { page-break-inside: avoid }
+    @page { margin: 1.5cm; size: A4 landscape }
+  }
+</style>
+</head>
+<body>
+  <div class="header">
+    <div class="header-top">
+      <div>
+        <div class="project-name">HARAJ-IQC-ALRAWAF</div>
+        <div class="project-sub">شركة المقاول للمقاولات · P216</div>
+      </div>
+      <div style="text-align:left">
+        <div class="report-title">التقرير الدوري الموحّد</div>
+        <div class="report-meta">تاريخ الإصدار: ${generated}</div>
+      </div>
+    </div>
+    <div class="period-bar">
+      <div class="period-item">الفترة: <strong>${from}</strong> إلى <strong>${to}</strong></div>
+      <div class="period-item">إجمالي السجلات: <strong>${totalNew}</strong></div>
+      <div class="period-item">عدد الأقسام: <strong>${activeSecs.length} / ${SECTIONS.length}</strong></div>
+    </div>
+  </div>
+
+  <div class="summary-title">ملخص الفترة</div>
+  <table class="summary-table">
+    <thead><tr><th>القسم</th><th style="width:120px">عدد السجلات</th></tr></thead>
+    <tbody>${summaryRows}</tbody>
+  </table>
+
+  ${detailSections}
+
+  <div class="footer">
+    تم إصدار هذا التقرير بتاريخ ${generated} · HARAJ-IQC-ALRAWAF P216
+  </div>
+
+  <script>window.onload = () => { window.print() }<\/script>
+</body>
+</html>`
+
+    const win = window.open('', '_blank', 'width=1100,height=800')
+    if (!win) { alert('يرجى السماح بفتح النوافذ المنبثقة في المتصفح'); return }
+    win.document.write(html)
+    win.document.close()
+  }
+
   const totalNew = Object.values(results).reduce((s, r) => s + r.count, 0)
   const activeSections = SECTIONS.filter(s => (results[s.table]?.count ?? 0) > 0)
 
@@ -199,7 +341,7 @@ export default function ReportsPage() {
       <Topbar
         title="التقرير الدوري"
         sub={ran ? `${from}  ←  ${to} · ${totalNew} سجل` : 'أسبوعي · شهري · نطاق حر'}
-        actions={ran && !loading ? (
+        actions={ran && !loading ? (<>
           <button className="btn btn-ghost btn-sm" onClick={exportExcel}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -208,7 +350,18 @@ export default function ReportsPage() {
             </svg>
             تصدير Excel
           </button>
-        ) : undefined}
+          <button className="btn btn-ghost btn-sm" onClick={exportPDF}
+            style={{ color: 'var(--red,#da3633)', borderColor: 'var(--red,#da3633)22' }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/>
+              <line x1="16" y1="17" x2="8" y2="17"/>
+              <line x1="10" y1="9" x2="8" y2="9"/>
+            </svg>
+            تصدير PDF
+          </button>
+        </>) : undefined}
       />
 
       <div className="page-content anim">
