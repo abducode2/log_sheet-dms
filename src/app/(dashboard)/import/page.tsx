@@ -3,6 +3,7 @@
 import { useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Topbar from '@/components/layout/Topbar'
+import { useRole } from '@/lib/hooks/useRole'
 import styles from './import.module.css'
 
 // ── Sheet → Table mapping ────────────────────────────────────────
@@ -219,6 +220,7 @@ const COL_RENAME: Record<string, Record<string, string>> = {
 
 export default function ImportPage() {
   const supabase = createClient()
+  const { isAdmin, loading: roleLoading } = useRole()
   const [status, setStatus]     = useState<'idle'|'parsing'|'preview'|'importing'|'done'|'error'>('idle')
   const [sheets, setSheets]     = useState<SheetPreview[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -371,7 +373,13 @@ export default function ImportPage() {
 
           if (allRows.length === 0) continue
 
-          const SKIP = new Set(['id','parent_id','is_archived','revision_count','created_at','updated_at'])
+          const SKIP = new Set([
+            'id',
+            'parent_id',
+            'is_archived',
+            'revision_count',
+            'created_at',
+            'updated_at'])
           const colMap = COL_RENAME[sheet.table] ?? {}
 
           const cleaned = allRows.map(row => {
@@ -492,6 +500,27 @@ export default function ImportPage() {
   }
 
   const totalRows = [...selected].reduce((s,t) => s+(parsed[t]?.length??0), 0)
+
+  if (roleLoading) return (
+    <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'60vh'}}>
+      <div className="spinner" style={{width:32,height:32,borderWidth:3}}/>
+    </div>
+  )
+
+  if (!isAdmin) return (
+    <>
+      <Topbar title="استيراد البيانات من Excel" sub="رفع ملف Excel وتعبئة قاعدة البيانات تلقائياً" />
+      <div className="page-content">
+        <div className="empty-state">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--red,#e53e3e)" strokeWidth="1.5">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          <div className="empty-title">غير مصرح بالوصول</div>
+          <div className="empty-sub">هذه الصفحة متاحة لمدير النظام فقط</div>
+        </div>
+      </div>
+    </>
+  )
 
   return (
     <>

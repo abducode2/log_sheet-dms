@@ -27,6 +27,9 @@ const NAV_STATIC = [
     { href:'/letters/rawaf-naga', label:'المقاول ← الاستشاري', dot:'#ffa657', countKey:'letters_rawaf_naga' },
     { href:'/letters/naga-rawaf', label:'الاستشاري ← المقاول', dot:'#f85149', countKey:'letters_naga_rawaf' },
   ]},
+  { label: 'التقارير', items: [
+    { href:'/reports', label:'التقرير الدوري', dot:'#e3b341', countKey: null },
+  ]},
   { label: 'الإدارة', items: [
     { href:'/users', label:'إدارة المستخدمين', dot:'#58a6ff', countKey: null, adminOnly: true },
   ]},

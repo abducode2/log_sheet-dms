@@ -191,10 +191,16 @@ export interface FieldReport {
   report_no: string
   subject: string
   date: string | null
+  close_date: string | null
+  location: string | null
+  category: 'Safety' | 'Quality' | 'Progress' | 'Environment' | null
+  priority: 'High' | 'Medium' | 'Low' | null
   inspector: string | null
+  assigned_to: string | null
   observations: string | null
   action_required: string | null
   status: 'Open' | 'Closed'
+  remarks: string | null
   created_at: string
 }
 
