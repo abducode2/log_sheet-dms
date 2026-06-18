@@ -536,7 +536,7 @@ export const translations = {
         deleteErr: 'Error deleting',
         uploadErr: 'Error uploading',
         viewerTitle: 'View File',
-        closeViewer: '✕ Close',
+        closeViewer: 'Close',
       },
       allElements: 'All Elements',
       vtimeAuto: 'Auto-calculated',
