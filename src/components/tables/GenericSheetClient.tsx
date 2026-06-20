@@ -58,7 +58,7 @@ export default function GenericSheetClient({
     <>
       <Topbar
         title={title}
-        sub={`${sub ?? 'HARAJ-IQC-ALRAWAF'} · ${total} سجل`}
+        sub={`${sub ?? 'نظام إدارة وثائق '} · ${total} سجل`}
        
       />
       <div className="page-content anim">

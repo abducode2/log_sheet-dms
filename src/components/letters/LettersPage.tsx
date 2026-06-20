@@ -151,7 +151,7 @@ function LettersPage({ table, title, addTitle, exportFile }: Props) {
     <>
       <Topbar
         title={title}
-        sub={`HARAJ-IQC-ALRAWAF · ${p.sub.replace('{n}', String(total))}`}
+        sub={`نظام إدارة وثائق مشروع· ${p.sub.replace('{n}', String(total))}`}
         actions={<>
 
           {isEditor && (

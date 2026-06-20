@@ -403,7 +403,7 @@ export default function ShopDrawingsPage() {
     <>
       <Topbar
         title={p.title}
-        sub={`HARAJ-IQC-ALRAWAF · ${p.sub.replace('{n}', String(counts.ALL ?? 0))}`}
+        sub={`نظام إدارة وثائق مشروع · ${p.sub.replace('{n}', String(counts.ALL ?? 0))}`}
         actions={<>
           {isEditor && <button className="btn btn-primary btn-sm" onClick={() => setShowAdd(true)}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

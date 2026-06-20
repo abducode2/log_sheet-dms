@@ -21,23 +21,7 @@ export async function updateSession(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // Redirect unauthenticated users to login
-  const isAuthRoute = request.nextUrl.pathname.startsWith('/auth')
-  const isPublic = request.nextUrl.pathname === '/'
-
-  if (!user && !isAuthRoute && !isPublic) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/auth/login'
-    return NextResponse.redirect(url)
-  }
-
-  if (user && isAuthRoute) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/dashboard'
-    return NextResponse.redirect(url)
-  }
+  await supabase.auth.getUser()
 
   return supabaseResponse
 }

@@ -58,7 +58,7 @@ const LANGS: { id: Lang; flag: string }[] = [
   { id: 'en', flag: '🇬🇧' },
 ]
 
-export default function Sidebar({ userEmail }: { userEmail: string }) {
+export default function Sidebar() {
   const pathname          = usePathname()
   const router            = useRouter()
   const supabase          = createClient()
@@ -84,11 +84,6 @@ export default function Sidebar({ userEmail }: { userEmail: string }) {
     }
     fetchCounts()
   }, [])
-
-  async function logout() {
-    await supabase.auth.signOut()
-    router.push('/auth/login')
-  }
 
   return (
     <aside className="sidebar">
@@ -195,18 +190,6 @@ export default function Sidebar({ userEmail }: { userEmail: string }) {
           </div>
         </div>
 
-        <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 8, padding: '0 2px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {userEmail}
-        </div>
-
-        <button className="nav-item" onClick={logout} style={{ color: 'var(--red)' }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-            <polyline points="16 17 21 12 16 7"/>
-            <line x1="21" y1="12" x2="9" y2="12"/>
-          </svg>
-          {t.logout}
-        </button>
       </div>
     </aside>
   )

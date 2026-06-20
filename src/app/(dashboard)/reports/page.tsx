@@ -296,7 +296,7 @@ export default function ReportsPage() {
   <div class="header">
     <div class="header-top">
       <div>
-        <div class="project-name">HARAJ-IQC-ALRAWAF</div>
+        <div class="project-name">نظام إدارة وثائق مشروع</div>
         <div class="project-sub">شركة المقاول للمقاولات · P216</div>
       </div>
       <div style="text-align:left">
@@ -320,7 +320,7 @@ export default function ReportsPage() {
   ${detailSections}
 
   <div class="footer">
-    تم إصدار هذا التقرير بتاريخ ${generated} · HARAJ-IQC-ALRAWAF P216
+    تم إصدار هذا التقرير بتاريخ ${generated} · نظام إدارة وثائق مشروع
   </div>
 
   <script>window.onload = () => { window.print() }<\/script>

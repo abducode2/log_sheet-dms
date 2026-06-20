@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
     const subDate = String(record.submission_date ?? today)
 
     // تحديث قيم الخلايا فقط — التصميم والصور وكل شيء آخر يبقى كما هو
-    sheetXml = setCell(sheetXml, 'A5',  'Project Name: HARAJ-IQC-ALRAWAF')
+    sheetXml = setCell(sheetXml, 'A5',  'Project Name: نظام إدارة وثائق مشروع')
     sheetXml = setCell(sheetXml, 'A6',  'Project Location: RIYADH')
     sheetXml = setCell(sheetXml, 'A10', `Date: ${subDate}`)
     sheetXml = setCell(sheetXml, 'F10', `SHD. No. ${reqNo}`)

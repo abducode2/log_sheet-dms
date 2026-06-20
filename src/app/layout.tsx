@@ -2,8 +2,8 @@ import type { Metadata } from 'next'
 import '@/styles/globals.css'
 
 export const metadata: Metadata = {
-  title: 'P-216 | HARAJ-IQC-ALRAWAF',
-  description: 'نظام إدارة وثائق مشروع HARAJ-IQC-ALRAWAF',
+  title: 'نظام إدارة وثائق مشروع',
+  description: 'نظام إدارة وثائق مشروع ',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
